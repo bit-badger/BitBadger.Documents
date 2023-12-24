@@ -119,6 +119,35 @@ module Query =
     let whereById paramName =
         whereByField (Configuration.idField ()) EQ paramName
     
+    /// Queries to define tables and indexes
+    module Definition =
+        
+        /// SQL statement to create a document table
+        let ensureTableFor name dataType =
+            $"CREATE TABLE IF NOT EXISTS %s{name} (data %s{dataType} NOT NULL)"
+        
+        /// Split a schema and table name
+        let private splitSchemaAndTable (tableName: string) =
+            let parts = tableName.Split '.'
+            if Array.length parts = 1 then "", tableName else parts[0], parts[1]
+        
+        /// SQL statement to create an index on one or more fields in a JSON document
+        let ensureIndexOn tableName indexName (fields: string seq) =
+            let _, tbl = splitSchemaAndTable tableName
+            let jsonFields =
+                fields
+                |> Seq.map (fun it ->
+                    let parts = it.Split ' '
+                    let fieldName = if Array.length parts = 1 then it else parts[0]
+                    let direction = if Array.length parts < 2 then "" else $" {parts[1]}"
+                    $"(data ->> '{fieldName}'){direction}")
+                |> String.concat ", "
+            $"CREATE INDEX IF NOT EXISTS idx_{tbl}_%s{indexName} ON {tableName} ({jsonFields})"
+
+        /// SQL statement to create a key index for a document table
+        let ensureKey tableName =
+            (ensureIndexOn tableName "key" [ Configuration.idField () ]).Replace("INDEX", "UNIQUE INDEX")
+        
     /// Query to insert a document
     [<CompiledName "Insert">]
     let insert tableName =

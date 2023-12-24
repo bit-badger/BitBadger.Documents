@@ -25,40 +25,22 @@ module Configuration =
         | None -> invalidOp "Please provide a connection string before attempting data access"
 
 
+[<RequireQualifiedAccess>]
+module Query =
+    
+    /// Data definition
+    module Definition =
+
+        /// SQL statement to create a document table
+        let ensureTable name =
+            Query.Definition.ensureTableFor name "TEXT"
+
+
 /// Execute a non-query command
 let internal write (cmd: SqliteCommand) = backgroundTask {
     let! _ = cmd.ExecuteNonQueryAsync()
     ()
 }
-
-/// Data definition
-[<RequireQualifiedAccess>]
-module Definition =
-
-    /// SQL statement to create a document table
-    let createTable name =
-        $"CREATE TABLE IF NOT EXISTS %s{name} (data TEXT NOT NULL)"
-    
-    /// SQL statement to create a key index for a document table
-    let createKey name =
-        $"CREATE UNIQUE INDEX IF NOT EXISTS idx_%s{name}_key ON {name} ((data ->> '{Configuration.idField ()}'))"
-        
-    /// Definitions that take a SqliteConnection as their last parameter
-    module WithConn =
-        
-        /// Create a document table
-        let ensureTable name (conn: SqliteConnection) = backgroundTask {
-            use cmd = conn.CreateCommand()
-            cmd.CommandText <- createTable name
-            do! write cmd
-            cmd.CommandText <- createKey name
-            do! write cmd
-        }
-    
-    /// Create a document table
-    let ensureTable name =
-        use conn = Configuration.dbConn ()
-        WithConn.ensureTable name conn
 
 
 /// Add a parameter to a SQLite command, ignoring the return value (can still be accessed on cmd via indexing)
@@ -118,6 +100,26 @@ open System.Threading.Tasks
 /// Versions of queries that accept a SqliteConnection as the last parameter
 module WithConn =
     
+    /// Functions to create tables and indexes
+    [<RequireQualifiedAccess>]
+    module Definition =
+        
+        /// Create a document table
+        let ensureTable name (conn: SqliteConnection) = backgroundTask {
+            use cmd = conn.CreateCommand()
+            cmd.CommandText <- Query.Definition.ensureTable name
+            do! write cmd
+            cmd.CommandText <- Query.Definition.ensureKey name
+            do! write cmd
+        }
+        
+        /// Create an index on a document table
+        let ensureIndex tableName indexName fields (conn: SqliteConnection) = backgroundTask {
+            use cmd = conn.CreateCommand()
+            cmd.CommandText <- Query.Definition.ensureIndexOn tableName indexName fields
+            do! write cmd
+        }
+
     /// Insert a new document
     let insert<'TDoc> tableName (document: 'TDoc) conn =
         executeNonQuery (Query.insert tableName) document conn
@@ -280,6 +282,15 @@ module WithConn =
             return if isFound then mapFunc rdr else Unchecked.defaultof<'T>
         }
 
+/// Functions to create tables and indexes
+[<RequireQualifiedAccess>]
+module Definition =
+
+    /// Create a document table
+    let ensureTable name =
+        use conn = Configuration.dbConn ()
+        WithConn.Definition.ensureTable name conn
+
 /// Insert a new document
 let insert<'TDoc> tableName (document: 'TDoc) =
     use conn = Configuration.dbConn ()
@@ -411,7 +422,11 @@ module Extensions =
         
         /// Create a document table
         member conn.ensureTable name =
-            Definition.WithConn.ensureTable name conn
+            WithConn.Definition.ensureTable name conn
+        
+        /// Create an index on a document table
+        member conn.ensureIndex tableName indexName fields =
+            WithConn.Definition.ensureIndex tableName indexName fields conn
         
         /// Insert a new document
         member conn.insert<'TDoc> tableName (document: 'TDoc) =

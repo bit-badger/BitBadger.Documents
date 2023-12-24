@@ -56,6 +56,36 @@ let all =
                         "WHERE clause not correct"
                 }
             ]
+            testList "Definition" [
+                test "ensureTableFor succeeds" {
+                    Expect.equal
+                        (Query.Definition.ensureTableFor "my.table" "JSONB")
+                        "CREATE TABLE IF NOT EXISTS my.table (data JSONB NOT NULL)"
+                        "CREATE TABLE statement not constructed correctly"
+                }
+                testList "ensureKey" [
+                    test "succeeds when a schema is present" {
+                        Expect.equal
+                            (Query.Definition.ensureKey "test.table")
+                            "CREATE UNIQUE INDEX IF NOT EXISTS idx_table_key ON test.table ((data ->> 'Id'))"
+                            "CREATE INDEX for key statement with schema not constructed correctly"
+                    }
+                    test "succeeds when a schema is not present" {
+                        Expect.equal
+                            (Query.Definition.ensureKey "table")
+                            "CREATE UNIQUE INDEX IF NOT EXISTS idx_table_key ON table ((data ->> 'Id'))"
+                            "CREATE INDEX for key statement without schema not constructed correctly"
+                    }
+                ]
+                test "ensureIndexOn succeeds for multiple fields and directions" {
+                    Expect.equal
+                        (Query.Definition.ensureIndexOn "test.table" "gibberish" [ "taco"; "guac DESC"; "salsa ASC" ])
+                        ([ "CREATE INDEX IF NOT EXISTS idx_table_gibberish ON test.table "
+                           "((data ->> 'taco'), (data ->> 'guac') DESC, (data ->> 'salsa') ASC)" ]
+                         |> String.concat "")
+                        "CREATE INDEX for multiple field statement incorrect"
+                }
+            ]
             test "insert succeeds" {
                 Expect.equal (Query.insert tbl) $"INSERT INTO {tbl} VALUES (@data)" "INSERT statement not correct"
             }
