@@ -1,4 +1,5 @@
-﻿module BitBadger.Documents.Sqlite
+﻿/// Document store implementation for SQLite
+module BitBadger.Documents.Sqlite
 
 open BitBadger.Documents
 open Microsoft.Data.Sqlite
@@ -27,6 +28,7 @@ module Configuration =
         | None -> invalidOp "Please provide a connection string before attempting data access"
 
 
+/// Query definitions
 [<RequireQualifiedAccess>]
 module Query =
     
@@ -39,90 +41,71 @@ module Query =
             Query.Definition.ensureTableFor name "TEXT"
 
 
-/// Create an ID parameter (key will be treated as a string)
-[<CompiledName "IdParam">]
-let idParam (key: 'TKey) =
-    SqliteParameter("@id", string key)
+/// Parameter handling helpers
+[<AutoOpen>]
+module Parameters =
+    
+    /// Create an ID parameter (name "@id", key will be treated as a string)
+    [<CompiledName "Id">]
+    let idParam (key: 'TKey) =
+        SqliteParameter("@id", string key)
 
-/// Create a parameter with a JSON value
-[<CompiledName "JsonParam">]
-let jsonParam name (it: 'TJson) =
-    SqliteParameter(name, Configuration.serializer().Serialize it)
+    /// Create a parameter with a JSON value
+    [<CompiledName "Json">]
+    let jsonParam name (it: 'TJson) =
+        SqliteParameter(name, Configuration.serializer().Serialize it)
 
-/// Create a JSON field parameter
-[<CompiledName "FieldParam">]
-let fieldParam (value: obj) =
-    SqliteParameter("@field", value)
+    /// Create a JSON field parameter (name "@field")
+    [<CompiledName "Field">]
+    let fieldParam (value: obj) =
+        SqliteParameter("@field", value)
 
-/// Create a domain item from a document, specifying the field in which the document is found
-[<CompiledName "FromDocument">]
-let fromDocument<'TDoc> field (rdr: SqliteDataReader) : 'TDoc =
-    Configuration.serializer().Deserialize<'TDoc>(rdr.GetString(rdr.GetOrdinal(field)))
 
-/// Create a domain item from a document
-[<CompiledName "FromData">]
-let fromData<'TDoc> rdr =
-    fromDocument<'TDoc> "data" rdr
+/// Helper functions for handling results
+[<AutoOpen>]
+module Results =
+    
+    /// Create a domain item from a document, specifying the field in which the document is found
+    [<CompiledName "FromDocument">]
+    let fromDocument<'TDoc> field (rdr: SqliteDataReader) : 'TDoc =
+        Configuration.serializer().Deserialize<'TDoc>(rdr.GetString(rdr.GetOrdinal(field)))
 
-/// Create a list of items for the results of the given command, using the specified mapping function
-[<CompiledName "ToCustomList">]
-let toCustomList<'TDoc> (cmd: SqliteCommand) (mapFunc: SqliteDataReader -> 'TDoc) = backgroundTask {
-    use! rdr = cmd.ExecuteReaderAsync()
-    let mutable it = Seq.empty<'TDoc>
-    while! rdr.ReadAsync() do
-        it <- Seq.append it (Seq.singleton (mapFunc rdr))
-    return List.ofSeq it
-}
+    /// Create a domain item from a document
+    [<CompiledName "FromData">]
+    let fromData<'TDoc> rdr =
+        fromDocument<'TDoc> "data" rdr
 
-/// Create a list of items for the results of the given command
-[<CompiledName "ToDocumentList">]
-let toDocumentList<'TDoc> (cmd: SqliteCommand) =
-    toCustomList<'TDoc> cmd fromData
+    /// Create a list of items for the results of the given command, using the specified mapping function
+    [<CompiledName "FSharpToCustomList">]
+    let toCustomList<'TDoc> (cmd: SqliteCommand) (mapFunc: SqliteDataReader -> 'TDoc) = backgroundTask {
+        use! rdr = cmd.ExecuteReaderAsync()
+        let mutable it = Seq.empty<'TDoc>
+        while! rdr.ReadAsync() do
+            it <- Seq.append it (Seq.singleton (mapFunc rdr))
+        return List.ofSeq it
+    }
+
+    /// Create a list of items for the results of the given command, using the specified mapping function
+    let ToCustomList<'TDoc>(cmd, mapFunc: System.Func<SqliteDataReader, 'TDoc>) = backgroundTask {
+        let! results = toCustomList<'TDoc> cmd mapFunc.Invoke
+        return ResizeArray<'TDoc> results
+    }
+
+    /// Create a list of items for the results of the given command
+    [<CompiledName "FSharpToDocumentList">]
+    let toDocumentList<'TDoc> (cmd: SqliteCommand) =
+        toCustomList<'TDoc> cmd fromData
+
+    /// Create a list of items for the results of the given command
+    let ToDocumentList<'TDoc> cmd =
+        ToCustomList<'TDoc>(cmd, fromData<'TDoc>)
+
 
 /// Execute a non-query command
 let internal write (cmd: SqliteCommand) = backgroundTask {
     let! _ = cmd.ExecuteNonQueryAsync()
     ()
 }
-
-
-/// Command creation helper functions
-[<AutoOpen>]
-module private Helpers =
-    
-    let addParam (cmd: SqliteCommand) it =
-        cmd.Parameters.Add it |> ignore
-    
-    /// Add an ID parameter to a command
-    let addIdParam (cmd: SqliteCommand) (key: 'TKey) =
-        addParam cmd (idParam key)
-
-    /// Add a JSON document parameter to a command
-    let addJsonParam (cmd: SqliteCommand) name (it: 'TJson) =
-        addParam cmd (jsonParam name it)
-
-    /// Add ID (@id) and document (@data) parameters to a command
-    let addIdAndDocParams cmd (docId: 'TKey) (doc: 'TDoc) =
-        addIdParam cmd docId
-        addJsonParam cmd "@data" doc
-
-    /// Add a parameter to a SQLite command, ignoring the return value (can still be accessed on cmd via indexing)
-    let addFieldParam (cmd: SqliteCommand) (value: obj) =
-        addParam cmd (SqliteParameter("@field", value))
-    
-    /// Execute a non-query statement to manipulate a document
-    let executeNonQuery query (document: 'T) (conn: SqliteConnection) =
-        use cmd = conn.CreateCommand()
-        cmd.CommandText <- query
-        addJsonParam cmd "@data" document
-        write cmd
-
-    /// Execute a non-query statement to manipulate a document with an ID specified
-    let executeNonQueryWithId query (docId: 'TKey) (document: 'TDoc) (conn: SqliteConnection) =
-        use cmd = conn.CreateCommand()
-        cmd.CommandText <- query
-        addIdAndDocParams cmd docId document
-        write cmd
 
 
 /// Versions of queries that accept a SqliteConnection as the last parameter
@@ -331,21 +314,68 @@ module WithConn =
         let byField tableName fieldName op (value: obj) conn =
             Custom.nonQuery (Query.Delete.byField tableName fieldName op) [ fieldParam value ] conn
 
+
+/// Commands to execute custom SQL queries
+[<RequireQualifiedAccess>]
+module Custom =
+
+    /// Execute a query that returns a list of results
+    [<CompiledName "FSharpList">]
+    let list<'TDoc> query parameters (mapFunc: SqliteDataReader -> 'TDoc) =
+        use conn = Configuration.dbConn ()
+        WithConn.Custom.list<'TDoc> query parameters mapFunc conn
+
+    /// Execute a query that returns a list of results
+    let List<'TDoc>(query, parameters, mapFunc: System.Func<SqliteDataReader, 'TDoc>) =
+        use conn = Configuration.dbConn ()
+        WithConn.Custom.List<'TDoc>(query, parameters, mapFunc, conn)
+
+    /// Execute a query that returns one or no results (returns None if not found)
+    [<CompiledName "FSharpSingle">]
+    let single<'TDoc> query parameters (mapFunc: SqliteDataReader -> 'TDoc) =
+        use conn = Configuration.dbConn ()
+        WithConn.Custom.single<'TDoc> query parameters mapFunc conn
+
+    /// Execute a query that returns one or no results (returns null if not found)
+    let Single<'TDoc when 'TDoc: null>(query, parameters, mapFunc: System.Func<SqliteDataReader, 'TDoc>) =
+        use conn = Configuration.dbConn ()
+        WithConn.Custom.Single<'TDoc>(query, parameters, mapFunc, conn)
+
+    /// Execute a query that does not return a value
+    [<CompiledName "NonQuery">]
+    let nonQuery query parameters =
+        use conn = Configuration.dbConn ()
+        WithConn.Custom.nonQuery query parameters conn
+    
+    /// Execute a query that returns a scalar value
+    [<CompiledName "FSharpScalar">]
+    let scalar<'T when 'T: struct> query parameters (mapFunc: SqliteDataReader -> 'T) =
+        use conn = Configuration.dbConn ()
+        WithConn.Custom.scalar<'T> query parameters mapFunc conn
+
+    /// Execute a query that returns a scalar value
+    let Scalar<'T when 'T: struct>(query, parameters, mapFunc: System.Func<SqliteDataReader, 'T>) =
+        use conn = Configuration.dbConn ()
+        WithConn.Custom.Scalar<'T>(query, parameters, mapFunc, conn)
+
 /// Functions to create tables and indexes
 [<RequireQualifiedAccess>]
 module Definition =
 
     /// Create a document table
+    [<CompiledName "EnsureTable">]
     let ensureTable name =
         use conn = Configuration.dbConn ()
         WithConn.Definition.ensureTable name conn
 
 /// Insert a new document
+[<CompiledName "Insert">]
 let insert<'TDoc> tableName (document: 'TDoc) =
     use conn = Configuration.dbConn ()
     WithConn.insert tableName document conn
 
 /// Save a document, inserting it if it does not exist and updating it if it does (AKA "upsert")
+[<CompiledName "Save">]
 let save<'TDoc> tableName (document: 'TDoc) =
     use conn = Configuration.dbConn ()
     WithConn.save tableName document conn
@@ -355,11 +385,13 @@ let save<'TDoc> tableName (document: 'TDoc) =
 module Count =
     
     /// Count all documents in a table
+    [<CompiledName "All">]
     let all tableName =
         use conn = Configuration.dbConn ()
         WithConn.Count.all tableName conn
     
     /// Count matching documents using a comparison on a JSON field
+    [<CompiledName "ByField">]
     let byField tableName fieldName op (value: obj) =
         use conn = Configuration.dbConn ()
         WithConn.Count.byField tableName fieldName op value conn
@@ -369,11 +401,13 @@ module Count =
 module Exists =
 
     /// Determine if a document exists for the given ID
+    [<CompiledName "ById">]
     let byId tableName (docId: 'TKey) =
         use conn = Configuration.dbConn ()
         WithConn.Exists.byId tableName docId conn
 
     /// Determine if a document exists using a comparison on a JSON field
+    [<CompiledName "ByField">]
     let byField tableName fieldName op (value: obj) =
         use conn = Configuration.dbConn ()
         WithConn.Exists.byField tableName fieldName op value conn
@@ -383,45 +417,78 @@ module Exists =
 module Find =
     
     /// Retrieve all documents in the given table
+    [<CompiledName "FSharpAll">]
     let all<'TDoc> tableName =
         use conn = Configuration.dbConn ()
         WithConn.Find.all<'TDoc> tableName conn
 
-    /// Retrieve a document by its ID
+    /// Retrieve all documents in the given table
+    let All<'TDoc> tableName =
+        use conn = Configuration.dbConn ()
+        WithConn.Find.All<'TDoc>(tableName, conn)
+
+    /// Retrieve a document by its ID (returns None if not found)
+    [<CompiledName "FSharpById">]
     let byId<'TKey, 'TDoc> tableName docId =
         use conn = Configuration.dbConn ()
         WithConn.Find.byId<'TKey, 'TDoc> tableName docId conn
 
+    /// Retrieve a document by its ID (returns null if not found)
+    let ById<'TKey, 'TDoc when 'TDoc: null>(tableName, docId) =
+        use conn = Configuration.dbConn ()
+        WithConn.Find.ById<'TKey, 'TDoc>(tableName, docId, conn)
+
     /// Retrieve documents via a comparison on a JSON field
+    [<CompiledName "FSharpByField">]
     let byField<'TDoc> tableName fieldName op value =
         use conn = Configuration.dbConn ()
         WithConn.Find.byField<'TDoc> tableName fieldName op value conn
 
+    /// Retrieve documents via a comparison on a JSON field
+    let ByField<'TDoc>(tableName, fieldName, op, value) =
+        use conn = Configuration.dbConn ()
+        WithConn.Find.ByField<'TDoc>(tableName, fieldName, op, value, conn)
+
     /// Retrieve documents via a comparison on a JSON field, returning only the first result
+    [<CompiledName "FSharpFirstByField">]
     let firstByField<'TDoc> tableName fieldName op value =
         use conn = Configuration.dbConn ()
         WithConn.Find.firstByField<'TDoc> tableName fieldName op value conn
+
+    /// Retrieve documents via a comparison on a JSON field, returning only the first result
+    let FirstByField<'TDoc when 'TDoc: null>(tableName, fieldName, op, value) =
+        use conn = Configuration.dbConn ()
+        WithConn.Find.FirstByField<'TDoc>(tableName, fieldName, op, value, conn)
 
 /// Commands to update documents
 [<RequireQualifiedAccess>]
 module Update =
     
     /// Update an entire document
+    [<CompiledName "Full">]
     let full tableName (docId: 'TKey) (document: 'TDoc) =
         use conn = Configuration.dbConn ()
         WithConn.Update.full tableName docId document conn
     
     /// Update an entire document
+    [<CompiledName "FSharpFullFunc">]
     let fullFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
         use conn = Configuration.dbConn ()
         WithConn.Update.fullFunc tableName idFunc document conn
     
+    /// Update an entire document
+    let FullFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc) =
+        use conn = Configuration.dbConn ()
+        WithConn.Update.FullFunc(tableName, idFunc, document, conn)
+    
     /// Update a partial document
+    [<CompiledName "PartialById">]
     let partialById tableName (docId: 'TKey) (partial: 'TPatch) =
         use conn = Configuration.dbConn ()
         WithConn.Update.partialById tableName docId partial conn
     
     /// Update partial documents using a comparison on a JSON field in the WHERE clause
+    [<CompiledName "PartialByField">]
     let partialByField tableName fieldName op (value: obj) (partial: 'TPatch) =
         use conn = Configuration.dbConn ()
         WithConn.Update.partialByField tableName fieldName op value partial conn
@@ -431,44 +498,40 @@ module Update =
 module Delete =
     
     /// Delete a document by its ID
+    [<CompiledName "ById">]
     let byId tableName (docId: 'TKey) =
         use conn = Configuration.dbConn ()
         WithConn.Delete.byId tableName docId conn
 
     /// Delete documents by matching a comparison on a JSON field
+    [<CompiledName "ByField">]
     let byField tableName fieldName op (value: obj) =
         use conn = Configuration.dbConn ()
         WithConn.Delete.byField tableName fieldName op value conn
 
-/// Commands to execute custom SQL queries
-[<RequireQualifiedAccess>]
-module Custom =
 
-    /// Execute a query that returns a list of results
-    let list<'TDoc> query parameters (mapFunc: SqliteDataReader -> 'TDoc) =
-        use conn = Configuration.dbConn ()
-        WithConn.Custom.list<'TDoc> query parameters mapFunc conn
-
-    /// Execute a query that returns one or no results
-    let single<'TDoc> query parameters (mapFunc: SqliteDataReader -> 'TDoc) =
-        use conn = Configuration.dbConn ()
-        WithConn.Custom.single<'TDoc> query parameters mapFunc conn
-
-    /// Execute a query that does not return a value
-    let nonQuery query parameters =
-        use conn = Configuration.dbConn ()
-        WithConn.Custom.nonQuery query parameters conn
-    
-    /// Execute a query that returns a scalar value
-    let scalar<'T when 'T : struct> query parameters (mapFunc: SqliteDataReader -> 'T) =
-        use conn = Configuration.dbConn ()
-        WithConn.Custom.scalar<'T> query parameters mapFunc conn
-
+/// F# extensions for the SqliteConnection type
 [<AutoOpen>]
 module Extensions =
 
     type SqliteConnection with
         
+        /// Execute a query that returns a list of results
+        member conn.customList<'TDoc> query parameters mapFunc =
+            WithConn.Custom.list<'TDoc> query parameters mapFunc conn
+
+        /// Execute a query that returns one or no results
+        member conn.customSingle<'TDoc> query parameters mapFunc =
+            WithConn.Custom.single<'TDoc> query parameters mapFunc conn
+        
+        /// Execute a query that does not return a value
+        member conn.customNonQuery query parameters =
+            WithConn.Custom.nonQuery query parameters conn
+
+        /// Execute a query that returns a scalar value
+        member conn.customScalar<'T when 'T: struct> query parameters mapFunc =
+            WithConn.Custom.scalar<'T> query parameters mapFunc conn
+
         /// Create a document table
         member conn.ensureTable name =
             WithConn.Definition.ensureTable name conn
@@ -541,18 +604,121 @@ module Extensions =
         member conn.deleteByField tableName fieldName op (value: obj) =
             WithConn.Delete.byField tableName fieldName op value conn
 
-        /// Execute a query that returns a list of results
-        member conn.customList<'TDoc> query parameters mapFunc =
-            WithConn.Custom.list<'TDoc> query parameters mapFunc conn
 
-        /// Execute a query that returns one or no results
-        member conn.customSingle<'TDoc> query parameters mapFunc =
-            WithConn.Custom.single<'TDoc> query parameters mapFunc conn
-        
-        /// Execute a query that does not return a value
-        member conn.customNonQuery query parameters =
-            WithConn.Custom.nonQuery query parameters conn
+open System.Runtime.CompilerServices
 
-        /// Execute a query that returns a scalar value
-        member conn.customScalar<'T when 'T: struct> query parameters mapFunc =
-            WithConn.Custom.scalar<'T> query parameters mapFunc conn
+/// C# extensions on the SqliteConnection type
+[<Extension>]
+type SqliteConnectionCSharpExtensions =
+    
+    /// Execute a query that returns a list of results
+    [<Extension>]
+    static member inline CustomList<'TDoc>(conn, query, parameters, mapFunc: System.Func<SqliteDataReader, 'TDoc>) =
+        WithConn.Custom.List<'TDoc>(query, parameters, mapFunc, conn)
+
+    /// Execute a query that returns one or no results
+    [<Extension>]
+    static member inline CustomSingle<'TDoc when 'TDoc: null>(
+            conn, query, parameters, mapFunc: System.Func<SqliteDataReader, 'TDoc>) =
+        WithConn.Custom.Single<'TDoc>(query, parameters, mapFunc, conn)
+    
+    /// Execute a query that does not return a value
+    [<Extension>]
+    static member inline CustomNonQuery(conn, query, parameters) =
+        WithConn.Custom.nonQuery query parameters conn
+
+    /// Execute a query that returns a scalar value
+    [<Extension>]
+    static member inline CustomScalar<'T when 'T: struct>(
+            conn, query, parameters, mapFunc: System.Func<SqliteDataReader, 'T>) =
+        WithConn.Custom.Scalar<'T>(query, parameters, mapFunc, conn)
+
+    /// Create a document table
+    [<Extension>]
+    static member inline EnsureTable(conn, name) =
+        WithConn.Definition.ensureTable name conn
+
+    /// Create an index on one or more fields in a document table
+    [<Extension>]
+    static member inline EnsureIndex(conn, tableName, indexName, fields) =
+        WithConn.Definition.ensureIndex tableName indexName fields conn
+
+    /// Insert a new document
+    [<Extension>]
+    static member inline Insert<'TDoc>(conn, tableName, document: 'TDoc) =
+        WithConn.insert<'TDoc> tableName document conn
+
+    /// Save a document, inserting it if it does not exist and updating it if it does (AKA "upsert")
+    [<Extension>]
+    static member inline Save<'TDoc>(conn, tableName, document: 'TDoc) =
+        WithConn.save<'TDoc> tableName document conn
+
+    /// Count all documents in a table
+    [<Extension>]
+    static member inline CountAll(conn, tableName) =
+        WithConn.Count.all tableName conn
+    
+    /// Count matching documents using a comparison on a JSON field
+    [<Extension>]
+    static member inline CountByField(conn, tableName, fieldName, op, value: obj) =
+        WithConn.Count.byField tableName fieldName op value conn
+
+    /// Determine if a document exists for the given ID
+    [<Extension>]
+    static member inline ExistsById<'TKey>(conn, tableName, docId: 'TKey) =
+        WithConn.Exists.byId tableName docId conn
+
+    /// Determine if a document exists using a comparison on a JSON field
+    [<Extension>]
+    static member inline ExistsByField(conn, tableName, fieldName, op, value: obj) =
+        WithConn.Exists.byField tableName fieldName op value conn
+    
+    /// Retrieve all documents in the given table
+    [<Extension>]
+    static member inline FindAll<'TDoc>(conn, tableName) =
+        WithConn.Find.All<'TDoc>(tableName, conn)
+
+    /// Retrieve a document by its ID
+    [<Extension>]
+    static member inline FindById<'TKey, 'TDoc when 'TDoc: null>(conn, tableName, docId: 'TKey) =
+        WithConn.Find.ById<'TKey, 'TDoc>(tableName, docId, conn)
+
+    /// Retrieve documents via a comparison on a JSON field
+    [<Extension>]
+    static member inline FindByField<'TDoc>(conn, tableName, fieldName, op, value) =
+        WithConn.Find.ByField<'TDoc>(tableName, fieldName, op, value, conn)
+
+    /// Retrieve documents via a comparison on a JSON field, returning only the first result
+    [<Extension>]
+    static member inline FindFirstByField<'TDoc when 'TDoc: null>(conn, tableName, fieldName, op, value: obj) =
+        WithConn.Find.FirstByField<'TDoc>(tableName, fieldName, op, value, conn)
+
+    /// Update an entire document
+    [<Extension>]
+    static member inline UpdateFull<'TKey, 'TDoc>(conn, tableName, docId: 'TKey, document: 'TDoc) =
+        WithConn.Update.full tableName docId document conn
+    
+    /// Update an entire document
+    [<Extension>]
+    static member inline UpdateFullFunc<'TKey, 'TDoc>(conn, tableName, idFunc: System.Func<'TDoc, 'TKey>, doc: 'TDoc) =
+        WithConn.Update.FullFunc(tableName, idFunc, doc, conn)
+    
+    /// Update a partial document
+    [<Extension>]
+    static member inline UpdatePartialById<'TKey, 'TPatch>(conn, tableName, docId: 'TKey, partial: 'TPatch) =
+        WithConn.Update.partialById tableName docId partial conn
+    
+    /// Update partial documents using a comparison on a JSON field
+    [<Extension>]
+    static member inline UpdatePartialByField<'TPatch>(conn, tableName, fieldName, op, value: obj, partial: 'TPatch) =
+        WithConn.Update.partialByField tableName fieldName op value partial conn
+
+    /// Delete a document by its ID
+    [<Extension>]
+    static member inline DeleteById<'TKey>(conn, tableName, docId: 'TKey) =
+        WithConn.Delete.byId tableName docId conn
+
+    /// Delete documents by matching a comparison on a JSON field
+    [<Extension>]
+    static member inline DeleteByField(conn, tableName, fieldName, op, value: obj) =
+        WithConn.Delete.byField tableName fieldName op value conn
