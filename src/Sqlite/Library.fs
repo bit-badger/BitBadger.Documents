@@ -60,6 +60,11 @@ module Parameters =
     let fieldParam (value: obj) =
         SqliteParameter("@field", value)
 
+    /// An empty parameter sequence
+    [<CompiledName "None">]
+    let noParams =
+        Seq.empty<SqliteParameter>
+
 
 /// Helper functions for handling results
 [<AutoOpen>]
