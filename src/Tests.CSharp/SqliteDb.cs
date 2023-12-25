@@ -39,12 +39,12 @@ public static class SqliteDb
     /// <summary>
     /// The table name for the catalog metadata
     /// </summary>
-    public static readonly string Catalog = "sqlite_master";
+    public const string Catalog = "sqlite_master";
 
     /// <summary>
     /// The name of the table used for testing
     /// </summary>
-    public static readonly string TableName = "test_table";
+    public const string TableName = "test_table";
 
     /// <summary>
     /// Create a throwaway database file with the test_table defined
