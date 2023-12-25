@@ -123,6 +123,7 @@ module Query =
     module Definition =
         
         /// SQL statement to create a document table
+        [<CompiledName "EnsureTableFor">]
         let ensureTableFor name dataType =
             $"CREATE TABLE IF NOT EXISTS %s{name} (data %s{dataType} NOT NULL)"
         
@@ -132,6 +133,7 @@ module Query =
             if Array.length parts = 1 then "", tableName else parts[0], parts[1]
         
         /// SQL statement to create an index on one or more fields in a JSON document
+        [<CompiledName "EnsureIndexOn">]
         let ensureIndexOn tableName indexName (fields: string seq) =
             let _, tbl = splitSchemaAndTable tableName
             let jsonFields =
@@ -145,6 +147,7 @@ module Query =
             $"CREATE INDEX IF NOT EXISTS idx_{tbl}_%s{indexName} ON {tableName} ({jsonFields})"
 
         /// SQL statement to create a key index for a document table
+        [<CompiledName "EnsureKey">]
         let ensureKey tableName =
             (ensureIndexOn tableName "key" [ Configuration.idField () ]).Replace("INDEX", "UNIQUE INDEX")
         

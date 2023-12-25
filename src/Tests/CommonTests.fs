@@ -29,10 +29,10 @@ let all =
                 Expect.equal (string NE) "<>" "The not equal to operator was not correct"
             }
             test "EX succeeds" {
-                Expect.equal (string EX) "IS NOT NULL" """The "exists" operator ws not correct"""
+                Expect.equal (string EX) "IS NOT NULL" """The "exists" operator was not correct"""
             }
             test "NEX succeeds" {
-                Expect.equal (string NEX) "IS NULL" """The "not exists" operator ws not correct"""
+                Expect.equal (string NEX) "IS NULL" """The "not exists" operator was not correct"""
             }
         ]
         testList "Query" [

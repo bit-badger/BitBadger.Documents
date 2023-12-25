@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -9,6 +8,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Common\BitBadger.Documents.Common.fsproj" />
     <ProjectReference Include="..\Sqlite\BitBadger.Documents.Sqlite.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Expecto" Version="10.1.0" />
   </ItemGroup>
 
 </Project>

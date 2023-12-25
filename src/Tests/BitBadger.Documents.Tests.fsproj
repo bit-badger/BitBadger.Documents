@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Common\BitBadger.Documents.Common.fsproj" />
     <ProjectReference Include="..\Sqlite\BitBadger.Documents.Sqlite.fsproj" />
+    <ProjectReference Include="..\Tests.CSharp\BitBadger.Documents.Tests.CSharp.csproj" />
   </ItemGroup>
 
 </Project>
