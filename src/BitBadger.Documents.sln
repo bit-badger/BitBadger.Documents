@@ -13,6 +13,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BitBadger.Documents.Sqlite"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitBadger.Documents.Tests.CSharp", "Tests.CSharp\BitBadger.Documents.Tests.CSharp.csproj", "{AB58418C-7F90-467E-8F67-F4E0AD9D8875}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BitBadger.Documents.Sqlite.Extensions", "Sqlite.Extensions\BitBadger.Documents.Sqlite.Extensions.fsproj", "{D416A5C8-B746-4FDF-8EC9-9CA0B8DA1384}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,5 +44,9 @@ Global
 		{AB58418C-7F90-467E-8F67-F4E0AD9D8875}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AB58418C-7F90-467E-8F67-F4E0AD9D8875}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AB58418C-7F90-467E-8F67-F4E0AD9D8875}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D416A5C8-B746-4FDF-8EC9-9CA0B8DA1384}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D416A5C8-B746-4FDF-8EC9-9CA0B8DA1384}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D416A5C8-B746-4FDF-8EC9-9CA0B8DA1384}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D416A5C8-B746-4FDF-8EC9-9CA0B8DA1384}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

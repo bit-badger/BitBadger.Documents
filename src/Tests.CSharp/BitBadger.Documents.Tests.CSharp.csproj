@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Common\BitBadger.Documents.Common.fsproj" />
+    <ProjectReference Include="..\Sqlite.Extensions\BitBadger.Documents.Sqlite.Extensions.fsproj" />
     <ProjectReference Include="..\Sqlite\BitBadger.Documents.Sqlite.fsproj" />
   </ItemGroup>
 
