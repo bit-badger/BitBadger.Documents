@@ -7,6 +7,7 @@
   <ItemGroup>
     <Compile Include="CommonTests.fs" />
     <Compile Include="Types.fs" />
+    <Compile Include="PostgresTests.fs" />
     <Compile Include="SqliteTests.fs" />
     <Compile Include="SqliteExtensionTests.fs" />
     <Compile Include="Program.fs" />
@@ -18,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Common\BitBadger.Documents.Common.fsproj" />
+    <ProjectReference Include="..\Postgres\BitBadger.Documents.Postgres.fsproj" />
     <ProjectReference Include="..\Sqlite.Extensions\BitBadger.Documents.Sqlite.Extensions.fsproj" />
     <ProjectReference Include="..\Sqlite\BitBadger.Documents.Sqlite.fsproj" />
     <ProjectReference Include="..\Tests.CSharp\BitBadger.Documents.Tests.CSharp.csproj" />

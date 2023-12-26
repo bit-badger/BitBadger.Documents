@@ -7,12 +7,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Common\BitBadger.Documents.Common.fsproj" />
+    <ProjectReference Include="..\Postgres\BitBadger.Documents.Postgres.fsproj" />
     <ProjectReference Include="..\Sqlite.Extensions\BitBadger.Documents.Sqlite.Extensions.fsproj" />
     <ProjectReference Include="..\Sqlite\BitBadger.Documents.Sqlite.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Expecto" Version="10.1.0" />
+    <PackageReference Include="ThrowawayDb.Postgres" Version="1.4.0" />
   </ItemGroup>
 
 </Project>
