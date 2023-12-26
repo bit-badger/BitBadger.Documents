@@ -141,18 +141,6 @@ let all =
                         $"UPDATE {tbl} SET data = @data WHERE data ->> 'Id' = @id"
                         "UPDATE full statement not correct"
                 }
-                test "partialById succeeds" {
-                    Expect.equal
-                        (Query.Update.partialById tbl)
-                        $"UPDATE {tbl} SET data = json_patch(data, json(@data)) WHERE data ->> 'Id' = @id"
-                        "UPDATE partial by ID statement not correct"
-                }
-                test "partialByField succeeds" {
-                    Expect.equal
-                        (Query.Update.partialByField tbl "Part" NE)
-                        $"UPDATE {tbl} SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field"
-                        "UPDATE partial by JSON comparison query not correct"
-                }
             ]
             testList "Delete" [
                 test "byId succeeds" {

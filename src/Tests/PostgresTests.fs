@@ -1,6 +1,7 @@
 module PostgresTests
 
 open Expecto
+open BitBadger.Documents
 open BitBadger.Documents.Postgres
 open BitBadger.Documents.Tests
 
@@ -30,13 +31,6 @@ let unitTests =
             }
         ]
         testList "Query" [
-            test "selectFromTable succeeds" {
-                Expect.equal (Query.selectFromTable PostgresDb.TableName) $"SELECT data FROM {PostgresDb.TableName}"
-                    "SELECT statement not correct"
-            }
-            test "whereById succeeds" {
-                Expect.equal (Query.whereById "@id") "data ->> 'Id' = @id" "WHERE clause not correct"
-            }
             test "whereDataContains succeeds" {
                 Expect.equal (Query.whereDataContains "@test") "data @> @test" "WHERE clause not correct"
             }
@@ -65,10 +59,6 @@ let unitTests =
                     "INSERT ON CONFLICT UPDATE statement not correct"
             }
             testList "Count" [
-                test "all succeeds" {
-                    Expect.equal (Query.Count.all PostgresDb.TableName) $"SELECT COUNT(*) AS it FROM {PostgresDb.TableName}"
-                        "Count query not correct"
-                }
                 test "byContains succeeds" {
                     Expect.equal (Query.Count.byContains PostgresDb.TableName)
                         $"SELECT COUNT(*) AS it FROM {PostgresDb.TableName} WHERE data @> @criteria"
@@ -81,11 +71,6 @@ let unitTests =
                 }
             ]
             testList "Exists" [
-                test "byId succeeds" {
-                    Expect.equal (Query.Exists.byId PostgresDb.TableName)
-                        $"SELECT EXISTS (SELECT 1 FROM {PostgresDb.TableName} WHERE data ->> 'Id' = @id) AS it"
-                        "ID existence query not correct"
-                }
                 test "byContains succeeds" {
                     Expect.equal (Query.Exists.byContains PostgresDb.TableName)
                         $"SELECT EXISTS (SELECT 1 FROM {PostgresDb.TableName} WHERE data @> @criteria) AS it"
@@ -98,10 +83,6 @@ let unitTests =
                 }
             ]
             testList "Find" [
-                test "byId succeeds" {
-                    Expect.equal (Query.Find.byId PostgresDb.TableName)
-                        $"SELECT data FROM {PostgresDb.TableName} WHERE data ->> 'Id' = @id" "SELECT by ID query not correct"
-                }
                 test "byContains succeeds" {
                     Expect.equal (Query.Find.byContains PostgresDb.TableName)
                         $"SELECT data FROM {PostgresDb.TableName} WHERE data @> @criteria"
@@ -114,11 +95,6 @@ let unitTests =
                 }
             ]
             testList "Update" [
-                test "full succeeds" {
-                    Expect.equal (Query.Update.full PostgresDb.TableName)
-                        $"UPDATE {PostgresDb.TableName} SET data = @data WHERE data ->> 'Id' = @id"
-                        "UPDATE full statement not correct"
-                }
                 test "partialById succeeds" {
                     Expect.equal (Query.Update.partialById PostgresDb.TableName)
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data ->> 'Id' = @id"
@@ -136,10 +112,6 @@ let unitTests =
                 }
             ]
             testList "Delete" [
-                test "byId succeeds" {
-                    Expect.equal (Query.Delete.byId PostgresDb.TableName) $"DELETE FROM {PostgresDb.TableName} WHERE data ->> 'Id' = @id"
-                        "DELETE by ID query not correct"
-                }
                 test "byContains succeeds" {
                     Expect.equal (Query.Delete.byContains PostgresDb.TableName)
                         $"DELETE FROM {PostgresDb.TableName} WHERE data @> @criteria"
@@ -266,14 +238,14 @@ let integrationTests =
                 let testDoc = { emptyDoc with Id = "test"; Sub = Some { Foo = "a"; Bar = "b" } }
                 do! insert PostgresDb.TableName testDoc
 
-                let! before = Find.byId<JsonDocument> PostgresDb.TableName "test"
-                if Option.isNone before then Expect.isTrue false "There should have been a document returned"
+                let! before = Find.byId<string, JsonDocument> PostgresDb.TableName "test"
+                Expect.isSome before "There should have been a document returned"
                 Expect.equal before.Value testDoc "The document is not correct"
 
                 let upd8Doc = { testDoc with Sub = Some { Foo = "c"; Bar = "d" } }
                 do! save PostgresDb.TableName upd8Doc
-                let! after = Find.byId<JsonDocument> PostgresDb.TableName "test"
-                if Option.isNone after then Expect.isTrue false "There should have been a document returned post-update"
+                let! after = Find.byId<string, JsonDocument> PostgresDb.TableName "test"
+                Expect.isSome after "There should have been a document returned post-update"
                 Expect.equal after.Value upd8Doc "The updated document is not correct"
             }
         ]
@@ -378,7 +350,7 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    let! doc = Find.byId<JsonDocument> PostgresDb.TableName "two"
+                    let! doc = Find.byId<string, JsonDocument> PostgresDb.TableName "two"
                     Expect.isTrue (Option.isSome doc) "There should have been a document returned"
                     Expect.equal doc.Value.Id "two" "The incorrect document was returned"
                 }
@@ -386,7 +358,7 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    let! doc = Find.byId<JsonDocument> PostgresDb.TableName "three hundred eighty-seven"
+                    let! doc = Find.byId<string, JsonDocument> PostgresDb.TableName "three hundred eighty-seven"
                     Expect.isFalse (Option.isSome doc) "There should not have been a document returned"
                 }
             ]
@@ -481,9 +453,8 @@ let integrationTests =
 
                     let testDoc = { emptyDoc with Id = "one"; Sub = Some { Foo = "blue"; Bar = "red" } }
                     do! Update.full PostgresDb.TableName "one" testDoc
-                    let! after = Find.byId<JsonDocument> PostgresDb.TableName "one"
-                    if Option.isNone after then
-                        Expect.isTrue false "There should have been a document returned post-update"
+                    let! after = Find.byId<string, JsonDocument> PostgresDb.TableName "one"
+                    Expect.isSome after "There should have been a document returned post-update"
                     Expect.equal after.Value testDoc "The updated document is not correct"
                 }
                 testTask "succeeds when no document is updated" {
@@ -504,9 +475,8 @@ let integrationTests =
 
                     do! Update.fullFunc PostgresDb.TableName (_.Id)
                             { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
-                    let! after = Find.byId<JsonDocument> PostgresDb.TableName "one"
-                    if Option.isNone after then
-                        Expect.isTrue false "There should have been a document returned post-update"
+                    let! after = Find.byId<string, JsonDocument> PostgresDb.TableName "one"
+                    Expect.isSome after "There should have been a document returned post-update"
                     Expect.equal after.Value { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
                         "The updated document is not correct"
                 }
@@ -526,9 +496,8 @@ let integrationTests =
                     do! loadDocs ()
                     
                     do! Update.partialById PostgresDb.TableName "one" {| NumValue = 44 |}
-                    let! after = Find.byId<JsonDocument> PostgresDb.TableName "one"
-                    if Option.isNone after then
-                        Expect.isTrue false "There should have been a document returned post-update"
+                    let! after = Find.byId<string, JsonDocument> PostgresDb.TableName "one"
+                    Expect.isSome after "There should have been a document returned post-update"
                     Expect.equal after.Value.NumValue 44 "The updated document is not correct"
                 }
                 testTask "succeeds when no document is updated" {

@@ -38,6 +38,21 @@ module Query =
         [<CompiledName "EnsureTable">]
         let ensureTable name =
             Query.Definition.ensureTableFor name "TEXT"
+    
+    /// Document update queries
+    module Update =
+        
+        /// Query to update a partial document by its ID
+        [<CompiledName "PartialById">]
+        let partialById tableName =
+            $"""UPDATE %s{tableName} SET data = json_patch(data, json(@data)) WHERE {Query.whereById "@id"}"""
+            
+        /// Query to update a partial document via a comparison on a JSON field
+        [<CompiledName "PartialByField">]
+        let partialByField tableName fieldName op =
+            sprintf
+                "UPDATE %s SET data = json_patch(data, json(@data)) WHERE %s"
+                tableName (Query.whereByField fieldName op "@field")
 
 
 /// Parameter handling helpers

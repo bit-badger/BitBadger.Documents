@@ -1,5 +1,7 @@
 ﻿namespace BitBadger.Documents.Postgres
 
+open Npgsql
+
 /// The type of index to generate for the document
 [<Struct>]
 type DocumentIndex =
@@ -91,14 +93,20 @@ module Definition =
 [<RequireQualifiedAccess>]
 module Query =
     
-    /// Create a SELECT clause to retrieve the document data from the given table
-    let selectFromTable tableName =
-        $"SELECT data FROM %s{tableName}"
-    
-    /// Create a WHERE clause fragment to implement an ID-based query
-    let whereById paramName =
-        $"data ->> '{Configuration.idField ()}' = %s{paramName}"
-    
+    module Definition =
+        
+        /// SQL statement to create a document table
+        [<CompiledName "EnsureTable">]
+        let ensureTable name =
+            Query.Definition.ensureTableFor name "JSONB"
+        
+        /// SQL statement to create an index on JSON documents in the specified table
+        [<CompiledName "EnsureJsonIndex">]
+        let ensureJsonIndex (name : string) idxType =
+            let extraOps = match idxType with Full -> "" | Optimized -> " jsonb_path_ops"
+            let tableName = name.Split '.' |> Array.last
+            $"CREATE INDEX IF NOT EXISTS idx_{tableName} ON {name} USING GIN (data{extraOps})"
+
     /// Create a WHERE clause fragment to implement a @> (JSON contains) condition
     let whereDataContains paramName =
         $"data @> %s{paramName}"
@@ -127,10 +135,6 @@ module Query =
     /// Queries for counting documents
     module Count =
         
-        /// Query to count all documents in a table
-        let all tableName =
-            $"SELECT COUNT(*) AS it FROM %s{tableName}"
-        
         /// Query to count matching documents using a JSON containment query (@>)
         let byContains tableName =
             $"""SELECT COUNT(*) AS it FROM %s{tableName} WHERE {whereDataContains "@criteria"}"""
@@ -141,10 +145,6 @@ module Query =
     
     /// Queries for determining document existence
     module Exists =
-
-        /// Query to determine if a document exists for the given ID
-        let byId tableName =
-            $"""SELECT EXISTS (SELECT 1 FROM %s{tableName} WHERE {whereById "@id"}) AS it"""
 
         /// Query to determine if documents exist using a JSON containment query (@>)
         let byContains tableName =
@@ -157,28 +157,24 @@ module Query =
     /// Queries for retrieving documents
     module Find =
 
-        /// Query to retrieve a document by its ID
-        let byId tableName =
-            $"""{selectFromTable tableName} WHERE {whereById "@id"}"""
-        
         /// Query to retrieve documents using a JSON containment query (@>)
         let byContains tableName =
-            $"""{selectFromTable tableName} WHERE {whereDataContains "@criteria"}"""
+            $"""{Query.selectFromTable tableName} WHERE {whereDataContains "@criteria"}"""
         
         /// Query to retrieve documents using a JSON Path match (@?)
         let byJsonPath tableName =
-            $"""{selectFromTable tableName} WHERE {whereJsonPathMatches "@path"}"""
+            $"""{Query.selectFromTable tableName} WHERE {whereJsonPathMatches "@path"}"""
     
     /// Queries to update documents
     module Update =
 
         /// Query to update a document
-        let full tableName =
-            $"""UPDATE %s{tableName} SET data = @data WHERE {whereById "@id"}"""
-
-        /// Query to update a document
         let partialById tableName =
-            $"""UPDATE %s{tableName} SET data = data || @data WHERE {whereById "@id"}"""
+            $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereById "@id"}"""
+        
+        /// Query to update a document
+        let partialByField tableName fieldName op =
+            $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereByField fieldName op "@field"}"""
         
         /// Query to update partial documents matching a JSON containment query (@>)
         let partialByContains tableName =
@@ -191,10 +187,6 @@ module Query =
     /// Queries to delete documents
     module Delete =
         
-        /// Query to delete a document by its ID
-        let byId tableName =
-            $"""DELETE FROM %s{tableName} WHERE {whereById "@id"}"""
-
         /// Query to delete documents using a JSON containment query (@>)
         let byContains tableName =
             $"""DELETE FROM %s{tableName} WHERE {whereDataContains "@criteria"}"""
@@ -204,6 +196,31 @@ module Query =
             $"""DELETE FROM %s{tableName} WHERE {whereJsonPathMatches "@path"}"""
 
 
+/// Functions for creating parameters
+[<AutoOpen>]
+module Parameters =
+    
+    /// Create an ID parameter (name "@id", key will be treated as a string)
+    [<CompiledName "Id">]
+    let idParam (key: 'TKey) =
+        "@id", Sql.string (string key)
+
+    /// Create a parameter with a JSON value
+    [<CompiledName "Json">]
+    let jsonParam (name: string) (it: 'TJson) =
+        name, Sql.jsonb (Configuration.serializer().Serialize it)
+
+    /// Create a JSON field parameter (name "@field")
+    [<CompiledName "Field">]
+    let fieldParam (value: obj) =
+        "@field", Sql.parameter (NpgsqlParameter("@field", value))
+
+    /// An empty parameter sequence
+    [<CompiledName "None">]
+    let noParams =
+        Seq.empty<string * SqlValue>
+
+    
 /// Functions for dealing with results
 [<AutoOpen>]
 module Results =
@@ -215,11 +232,69 @@ module Results =
     /// Create a domain item from a document
     let fromData<'T> row : 'T =
         fromDocument "data" row
+    
+    /// Extract a count from the column "it"
+    let toCount (row: RowReader) =
+        row.int "it"
+    
+    /// Extract a true/false value from the column "it"
+    let toExists (row: RowReader) =
+        row.bool "it"
 
 
 /// Versions of queries that accept SqlProps as the last parameter
 module WithProps =
     
+    /// Commands to execute custom SQL queries
+    [<RequireQualifiedAccess>]
+    module Custom =
+
+        /// Execute a query that returns a list of results
+        [<CompiledName "FSharpList">]
+        let list<'T> query parameters (mapFunc: RowReader -> 'T) sqlProps =
+            Sql.query query sqlProps
+            |> Sql.parameters parameters
+            |> Sql.executeAsync mapFunc
+
+        /// Execute a query that returns a list of results
+        let List<'T>(query, parameters, mapFunc: System.Func<RowReader, 'T>, sqlProps) = backgroundTask {
+            let! results = list query (List.ofSeq parameters) mapFunc.Invoke sqlProps
+            return ResizeArray results
+        }
+        
+        /// Execute a query that returns one or no results (returns None if not found)
+        [<CompiledName "FSharpSingle">]
+        let single<'T> query parameters mapFunc sqlProps = backgroundTask {
+            let! results = list<'T> query parameters mapFunc sqlProps
+            return FSharp.Collections.List.tryHead results
+        }
+
+        /// Execute a query that returns one or no results (returns null if not found)
+        let Single<'T when 'T: null>(
+                query, parameters, mapFunc: System.Func<RowReader, 'T>, sqlProps) = backgroundTask {
+            let! result = single<'T> query (FSharp.Collections.List.ofSeq parameters) mapFunc.Invoke sqlProps
+            return Option.toObj result
+        }
+
+        /// Execute a query that returns no results
+        [<CompiledName "NonQuery">]
+        let nonQuery query parameters sqlProps =
+            Sql.query query sqlProps
+            |> Sql.parameters (FSharp.Collections.List.ofSeq parameters)
+            |> Sql.executeNonQueryAsync
+            |> ignoreTask
+        
+        /// Execute a query that returns a scalar value
+        [<CompiledName "FSharpScalar">]
+        let scalar<'T when 'T: struct> query parameters (mapFunc: RowReader -> 'T) sqlProps =
+            Sql.query query sqlProps
+            |> Sql.parameters parameters
+            |> Sql.executeRowAsync mapFunc
+        
+        /// Execute a query that returns a scalar value
+        let Scalar<'T when 'T: struct>(query, parameters, mapFunc: System.Func<RowReader, 'T>, sqlProps) =
+            scalar<'T> query (FSharp.Collections.List.ofSeq parameters) mapFunc.Invoke sqlProps
+
     /// Execute a non-query statement to manipulate a document
     let private executeNonQuery query (document: 'T) sqlProps =
         sqlProps
@@ -236,208 +311,283 @@ module WithProps =
         |> Sql.executeNonQueryAsync
         |> ignoreTask
 
-    /// Insert a new document
-    let insert<'T> tableName (document: 'T) sqlProps =
-        executeNonQuery (Query.insert tableName) document sqlProps
+    /// Commands to add documents
+    [<AutoOpen>]
+    module Document =
+        
+        /// Insert a new document
+        [<CompiledName "Insert">]
+        let insert<'TDoc> tableName (document: 'TDoc) sqlProps =
+            Custom.nonQuery (Query.insert tableName) [ jsonParam "@data" document ] sqlProps
 
-    /// Save a document, inserting it if it does not exist and updating it if it does (AKA "upsert")
-    let save<'T> tableName (document: 'T) sqlProps =
-        executeNonQuery (Query.save tableName) document sqlProps
+        /// Save a document, inserting it if it does not exist and updating it if it does (AKA "upsert")
+        [<CompiledName "Save">]
+        let save<'TDoc> tableName (document: 'TDoc) sqlProps =
+            Custom.nonQuery (Query.save tableName) [ jsonParam "@data" document ] sqlProps
 
     /// Commands to count documents
     [<RequireQualifiedAccess>]
     module Count =
         
         /// Count all documents in a table
+        [<CompiledName "All">]
         let all tableName sqlProps =
-            sqlProps
-            |> Sql.query (Query.Count.all tableName)
-            |> Sql.executeRowAsync (fun row -> row.int "it")
+            Custom.scalar (Query.Count.all tableName) [] toCount sqlProps
+        
+        /// Count matching documents using a JSON field comparison (->> =)
+        [<CompiledName "ByField">]
+        let byField tableName fieldName op (value: obj) sqlProps =
+            Custom.scalar (Query.Count.byField tableName fieldName op) [ fieldParam value ] toCount sqlProps
         
         /// Count matching documents using a JSON containment query (@>)
-        let byContains tableName (criteria: obj) sqlProps =
-            sqlProps
-            |> Sql.query (Query.Count.byContains tableName)
-            |> Sql.parameters [ "@criteria", Query.jsonbDocParam criteria ]
-            |> Sql.executeRowAsync (fun row -> row.int "it")
+        [<CompiledName "ByContains">]
+        let byContains tableName (criteria: 'TContains) sqlProps =
+            Custom.scalar (Query.Count.byContains tableName) [ jsonParam "@criteria" criteria ] toCount sqlProps
 
         /// Count matching documents using a JSON Path match query (@?)
+        [<CompiledName "ByJsonPath">]
         let byJsonPath tableName jsonPath sqlProps =
-            sqlProps
-            |> Sql.query (Query.Count.byJsonPath tableName)
-            |> Sql.parameters [ "@path", Sql.string jsonPath ]
-            |> Sql.executeRowAsync (fun row -> row.int "it")
+            Custom.scalar (Query.Count.byJsonPath tableName) [ "@path", Sql.string jsonPath ] toCount sqlProps
     
     /// Commands to determine if documents exist
     [<RequireQualifiedAccess>]
     module Exists =
 
         /// Determine if a document exists for the given ID
-        let byId tableName docId sqlProps =
-            sqlProps
-            |> Sql.query (Query.Exists.byId tableName)
-            |> Sql.parameters [ "@id", Sql.string docId ]
-            |> Sql.executeRowAsync (fun row -> row.bool "it")
+        [<CompiledName "ById">]
+        let byId tableName (docId: 'TKey) sqlProps =
+            Custom.scalar (Query.Exists.byId tableName) [ idParam docId ] toExists sqlProps
 
+        /// Determine if a document exists using a JSON field comparison (->> =)
+        [<CompiledName "ByField">]
+        let byField tableName fieldName op (value: obj) sqlProps =
+            Custom.scalar (Query.Exists.byField tableName fieldName op) [ fieldParam value ] toExists sqlProps
+        
         /// Determine if a document exists using a JSON containment query (@>)
-        let byContains tableName (criteria: obj) sqlProps =
-            sqlProps
-            |> Sql.query (Query.Exists.byContains tableName)
-            |> Sql.parameters [ "@criteria", Query.jsonbDocParam criteria ]
-            |> Sql.executeRowAsync (fun row -> row.bool "it")
+        [<CompiledName "ByContains">]
+        let byContains tableName (criteria: 'TContains) sqlProps =
+            Custom.scalar (Query.Exists.byContains tableName) [ jsonParam "@criteria" criteria ] toExists sqlProps
 
         /// Determine if a document exists using a JSON Path match query (@?)
+        [<CompiledName "ByJsonPath">]
         let byJsonPath tableName jsonPath sqlProps =
-            sqlProps
-            |> Sql.query (Query.Exists.byJsonPath tableName)
-            |> Sql.parameters [ "@path", Sql.string jsonPath ]
-            |> Sql.executeRowAsync (fun row -> row.bool "it")
+            Custom.scalar (Query.Exists.byJsonPath tableName) [ "@path", Sql.string jsonPath ] toExists sqlProps
 
     /// Commands to determine if documents exist
     [<RequireQualifiedAccess>]
     module Find =
         
         /// Retrieve all documents in the given table
-        let all<'T> tableName sqlProps =
-            sqlProps
-            |> Sql.query (Query.selectFromTable tableName)
-            |> Sql.executeAsync fromData<'T>
+        [<CompiledName "FSharpAll">]
+        let all<'TDoc> tableName sqlProps =
+            Custom.list<'TDoc> (Query.selectFromTable tableName) [] fromData<'TDoc> sqlProps
 
-        /// Retrieve a document by its ID
-        let byId<'T> tableName docId sqlProps = backgroundTask {
-            let! results =
-                sqlProps
-                |> Sql.query (Query.Find.byId tableName)
-                |> Sql.parameters [ "@id", Sql.string docId ]
-                |> Sql.executeAsync fromData<'T>
-            return List.tryHead results
-        }
+        /// Retrieve all documents in the given table
+        let All<'TDoc>(tableName, sqlProps) =
+            Custom.List<'TDoc>(Query.selectFromTable tableName, [], fromData<'TDoc>, sqlProps)
 
-        /// Execute a JSON containment query (@>)
-        let byContains<'T> tableName (criteria: obj) sqlProps =
-            sqlProps
-            |> Sql.query (Query.Find.byContains tableName)
-            |> Sql.parameters [ "@criteria", Query.jsonbDocParam criteria ]
-            |> Sql.executeAsync fromData<'T>
+        /// Retrieve a document by its ID (returns None if not found)
+        [<CompiledName "FSharpById">]
+        let byId<'TKey, 'TDoc> tableName (docId: 'TKey) sqlProps =
+            Custom.single (Query.Find.byId tableName) [ idParam docId ] fromData<'TDoc> sqlProps
 
-        /// Execute a JSON Path match query (@?)
-        let byJsonPath<'T> tableName jsonPath sqlProps =
-            sqlProps
-            |> Sql.query (Query.Find.byJsonPath tableName)
-            |> Sql.parameters [ "@path", Sql.string jsonPath ]
-            |> Sql.executeAsync fromData<'T>
+        /// Retrieve a document by its ID (returns null if not found)
+        let ById<'TKey, 'TDoc when 'TDoc: null>(tableName, docId: 'TKey, sqlProps) =
+            Custom.Single<'TDoc>(Query.Find.byId tableName, [ idParam docId ], fromData<'TDoc>, sqlProps)
+
+        /// Retrieve documents matching a JSON field comparison (->> =)
+        [<CompiledName "FSharpByField">]
+        let byField<'TDoc> tableName fieldName op (value: obj) sqlProps =
+            Custom.list<'TDoc> (Query.Find.byField tableName fieldName op) [ fieldParam value ] fromData<'TDoc> sqlProps
         
-        /// Execute a JSON containment query (@>), returning only the first result
-        let firstByContains<'T> tableName (criteria: obj) sqlProps = backgroundTask {
-            let! results = byContains<'T> tableName criteria sqlProps
-            return List.tryHead results
-        }
+        /// Retrieve documents matching a JSON field comparison (->> =)
+        let ByField<'TDoc>(tableName, fieldName, op, value: obj, sqlProps) =
+            Custom.List<'TDoc>(
+                Query.Find.byField tableName fieldName op, [ fieldParam value ], fromData<'TDoc>, sqlProps)
+        
+        /// Retrieve documents matching a JSON containment query (@>)
+        [<CompiledName "FSharpByContains">]
+        let byContains<'TDoc> tableName (criteria: obj) sqlProps =
+            Custom.list<'TDoc>
+                (Query.Find.byContains tableName) [ jsonParam "@criteria" criteria ] fromData<'TDoc> sqlProps
 
-        /// Execute a JSON Path match query (@?), returning only the first result
-        let firstByJsonPath<'T> tableName jsonPath sqlProps = backgroundTask {
-            let! results = byJsonPath<'T> tableName jsonPath sqlProps
-            return List.tryHead results
-        }
+        /// Retrieve documents matching a JSON containment query (@>)
+        let ByContains<'TDoc>(tableName, criteria: obj, sqlProps) =
+            Custom.List<'TDoc>(
+                Query.Find.byContains tableName, [ jsonParam "@criteria" criteria ], fromData<'TDoc>, sqlProps)
+
+        /// Retrieve documents matching a JSON Path match query (@?)
+        [<CompiledName "FSharpByJsonPath">]
+        let byJsonPath<'TDoc> tableName jsonPath sqlProps =
+            Custom.list<'TDoc>
+                (Query.Find.byJsonPath tableName) [ "@path", Sql.string jsonPath ] fromData<'TDoc> sqlProps
+        
+        /// Retrieve documents matching a JSON Path match query (@?)
+        let ByJsonPath<'TDoc>(tableName, jsonPath, sqlProps) =
+            Custom.List<'TDoc>(
+                Query.Find.byJsonPath tableName, [ "@path", Sql.string jsonPath ], fromData<'TDoc>, sqlProps)
+        
+        /// Retrieve the first document matching a JSON field comparison (->> =); returns None if not found
+        [<CompiledName "FSharpFirstByField">]
+        let firstByField<'TDoc> tableName fieldName op (value: obj) sqlProps =
+            Custom.single<'TDoc>
+                $"{Query.Find.byField tableName fieldName op} LIMIT 1" [ fieldParam value ] fromData<'TDoc> sqlProps
+            
+        /// Retrieve the first document matching a JSON field comparison (->> =); returns null if not found
+        let FirstByField<'TDoc when 'TDoc: null>(tableName, fieldName, op, value: obj, sqlProps) =
+            Custom.Single<'TDoc>(
+                $"{Query.Find.byField tableName fieldName op} LIMIT 1", [ fieldParam value ], fromData<'TDoc>, sqlProps)
+            
+        /// Retrieve the first document matching a JSON containment query (@>); returns None if not found
+        [<CompiledName "FSharpFirstByContains">]
+        let firstByContains<'TDoc> tableName (criteria: obj) sqlProps =
+            Custom.single<'TDoc>
+                $"{Query.Find.byContains tableName} LIMIT 1" [ jsonParam "@criteria" criteria ] fromData<'TDoc> sqlProps
+
+        /// Retrieve the first document matching a JSON containment query (@>); returns null if not found
+        let FirstByContains<'TDoc when 'TDoc: null>(tableName, criteria: obj, sqlProps) =
+            Custom.Single<'TDoc>(
+                $"{Query.Find.byContains tableName} LIMIT 1",
+                [ jsonParam "@criteria" criteria ],
+                fromData<'TDoc>,
+                sqlProps)
+
+        /// Retrieve the first document matching a JSON Path match query (@?); returns None if not found
+        [<CompiledName "FSharpFirstByJsonPath">]
+        let firstByJsonPath<'TDoc> tableName jsonPath sqlProps =
+            Custom.single<'TDoc>
+                $"{Query.Find.byJsonPath tableName} LIMIT 1" [ "@path", Sql.string jsonPath ] fromData<'TDoc> sqlProps
+
+        /// Retrieve the first document matching a JSON Path match query (@?); returns null if not found
+        let FirstByJsonPath<'TDoc when 'TDoc: null>(tableName, jsonPath, sqlProps) =
+            Custom.Single<'TDoc>(
+                $"{Query.Find.byJsonPath tableName} LIMIT 1",
+                [ "@path", Sql.string jsonPath ],
+                fromData<'TDoc>,
+                sqlProps)
 
     /// Commands to update documents
     [<RequireQualifiedAccess>]
     module Update =
         
         /// Update an entire document
-        let full<'T> tableName docId (document: 'T) sqlProps =
-            executeNonQueryWithId (Query.Update.full tableName) docId document sqlProps
+        [<CompiledName "Full">]
+        let full tableName (docId: 'TKey) (document: 'TDoc) sqlProps =
+            Custom.nonQuery (Query.Update.full tableName) [ idParam docId; jsonParam "@data" document ] sqlProps
         
         /// Update an entire document
-        let fullFunc<'T> tableName (idFunc: 'T -> string) (document: 'T) sqlProps =
+        [<CompiledName "FSharpFullFunc">]
+        let fullFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) sqlProps =
             full tableName (idFunc document) document sqlProps
         
+        /// Update an entire document
+        let FullFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc, sqlProps) =
+            fullFunc tableName idFunc.Invoke document sqlProps
+        
         /// Update a partial document
-        let partialById tableName docId (partial: obj) sqlProps =
-            executeNonQueryWithId (Query.Update.partialById tableName) docId partial sqlProps
+        [<CompiledName "PartialById">]
+        let partialById tableName (docId: 'TKey) (partial: 'TPartial) sqlProps =
+            Custom.nonQuery (Query.Update.partialById tableName) [ idParam docId; jsonParam "@data" partial ] sqlProps
+        
+        /// Update partial documents using a JSON field comparison query in the WHERE clause (->> =)
+        [<CompiledName "PartialByField">]
+        let partialByField tableName fieldName op (value: obj) (partial: 'TPartial) sqlProps =
+            Custom.nonQuery
+                (Query.Update.partialByField tableName fieldName op)
+                [ jsonParam "@data" partial; fieldParam value ]
+                sqlProps
         
         /// Update partial documents using a JSON containment query in the WHERE clause (@>)
-        let partialByContains tableName (criteria: obj) (partial: obj) sqlProps =
-            sqlProps
-            |> Sql.query (Query.Update.partialByContains tableName)
-            |> Sql.parameters [ "@data", Query.jsonbDocParam partial; "@criteria", Query.jsonbDocParam criteria ]
-            |> Sql.executeNonQueryAsync
-            |> ignoreTask 
+        [<CompiledName "PartialByContains">]
+        let partialByContains tableName (criteria: 'TContains) (partial: 'TPartial) sqlProps =
+            Custom.nonQuery
+                (Query.Update.partialByContains tableName)
+                [ jsonParam "@data" partial; jsonParam "@criteria" criteria ]
+                sqlProps
         
         /// Update partial documents using a JSON Path match query in the WHERE clause (@?)
-        let partialByJsonPath tableName jsonPath (partial: obj) sqlProps =
-            sqlProps
-            |> Sql.query (Query.Update.partialByJsonPath tableName)
-            |> Sql.parameters [ "@data", Query.jsonbDocParam partial; "@path", Sql.string jsonPath ]
-            |> Sql.executeNonQueryAsync
-            |> ignoreTask 
+        [<CompiledName "PartialByJsonPath">]
+        let partialByJsonPath tableName jsonPath (partial: 'TPartial) sqlProps =
+            Custom.nonQuery
+                (Query.Update.partialByJsonPath tableName)
+                [ jsonParam "@data" partial; "@path", Sql.string jsonPath ]
+                sqlProps
 
     /// Commands to delete documents
     [<RequireQualifiedAccess>]
     module Delete =
         
         /// Delete a document by its ID
-        let byId tableName docId sqlProps =
-            executeNonQueryWithId (Query.Delete.byId tableName) docId {||} sqlProps
+        [<CompiledName "ById">]
+        let byId tableName (docId: 'TKey) sqlProps =
+            Custom.nonQuery (Query.Delete.byId tableName) [ idParam docId ] sqlProps
 
+        /// Delete documents by matching a JSON field comparison query (->> =)
+        [<CompiledName "ByField">]
+        let byField tableName fieldName op (value: obj) sqlProps =
+            Custom.nonQuery (Query.Delete.byField tableName fieldName op) [ fieldParam value ] sqlProps
+        
         /// Delete documents by matching a JSON contains query (@>)
-        let byContains tableName (criteria: obj) sqlProps =
-            sqlProps
-            |> Sql.query (Query.Delete.byContains tableName)
-            |> Sql.parameters [ "@criteria", Query.jsonbDocParam criteria ]
-            |> Sql.executeNonQueryAsync
-            |> ignoreTask
+        [<CompiledName "ByContains">]
+        let byContains tableName (criteria: 'TCriteria) sqlProps =
+            Custom.nonQuery (Query.Delete.byContains tableName) [ jsonParam "@criteria" criteria ] sqlProps
 
         /// Delete documents by matching a JSON Path match query (@?)
+        [<CompiledName "ByJsonPath">]
         let byJsonPath tableName path sqlProps =
-            sqlProps
-            |> Sql.query (Query.Delete.byJsonPath tableName)
-            |> Sql.parameters [ "@path", Sql.string path ]
-            |> Sql.executeNonQueryAsync
-            |> ignoreTask
+            Custom.nonQuery (Query.Delete.byJsonPath tableName) [ "@path", Sql.string path ] sqlProps
     
-    /// Commands to execute custom SQL queries
-    [<RequireQualifiedAccess>]
-    module Custom =
+    
+/// Commands to execute custom SQL queries
+[<RequireQualifiedAccess>]
+module Custom =
 
-        /// Execute a query that returns one or no results
-        let single<'T> query parameters (mapFunc: RowReader -> 'T) sqlProps = backgroundTask {
-            let! results =
-                Sql.query query sqlProps
-                |> Sql.parameters parameters
-                |> Sql.executeAsync mapFunc
-            return List.tryHead results
-        }
+    /// Execute a query that returns a list of results
+    [<CompiledName "FSharpList">]
+    let list<'TDoc> query parameters (mapFunc: RowReader -> 'TDoc) =
+        WithProps.Custom.list<'TDoc> query parameters mapFunc (fromDataSource ())
 
-        /// Execute a query that returns a list of results
-        let list<'T> query parameters (mapFunc: RowReader -> 'T) sqlProps =
-            Sql.query query sqlProps
-            |> Sql.parameters parameters
-            |> Sql.executeAsync mapFunc
+    /// Execute a query that returns a list of results
+    let List<'TDoc>(query, parameters, mapFunc: System.Func<RowReader, 'TDoc>) =
+        WithProps.Custom.List<'TDoc>(query, parameters, mapFunc, fromDataSource ())
 
-        /// Execute a query that returns no results
-        let nonQuery query parameters sqlProps =
-            Sql.query query sqlProps
-            |> Sql.parameters (List.ofSeq parameters)
-            |> Sql.executeNonQueryAsync
-            |> ignoreTask
-        
-        /// Execute a query that returns a scalar value
-        let scalar<'T when 'T : struct> query parameters (mapFunc: RowReader -> 'T) sqlProps =
-            Sql.query query sqlProps
-            |> Sql.parameters parameters
-            |> Sql.executeRowAsync mapFunc
+    /// Execute a query that returns one or no results; returns None if not found
+    [<CompiledName "FSharpSingle">]
+    let single<'TDoc> query parameters (mapFunc: RowReader ->  'TDoc) =
+        WithProps.Custom.single<'TDoc> query parameters mapFunc (fromDataSource ())
+
+    /// Execute a query that returns one or no results; returns null if not found
+    let Single<'TDoc when 'TDoc: null>(query, parameters, mapFunc: System.Func<RowReader, 'TDoc>) =
+        WithProps.Custom.Single<'TDoc>(query, parameters, mapFunc, fromDataSource ())
+
+    /// Execute a query that returns no results
+    [<CompiledName "NonQuery">]
+    let nonQuery query parameters =
+        WithProps.Custom.nonQuery query parameters (fromDataSource ())
+
+    /// Execute a query that returns a scalar value
+    [<CompiledName "FSharpScalar">]
+    let scalar<'T when 'T: struct> query parameters (mapFunc: RowReader -> 'T) =
+        WithProps.Custom.scalar query parameters mapFunc (fromDataSource ())
+
+    /// Execute a query that returns a scalar value
+    let Scalar<'T when 'T: struct>(query, parameters, mapFunc: System.Func<RowReader, 'T>) =
+        WithProps.Custom.Scalar<'T>(query, parameters, mapFunc, fromDataSource ())
 
 
 /// Document writing functions
 [<AutoOpen>]
 module Document =
+    
     /// Insert a new document
-    let insert<'T> tableName (document: 'T) =
-        WithProps.insert tableName document (fromDataSource ())
+    [<CompiledName "Insert">]
+    let insert<'TDoc> tableName (document: 'TDoc) =
+        WithProps.Document.insert<'TDoc> tableName document (fromDataSource ())
 
     /// Save a document, inserting it if it does not exist and updating it if it does (AKA "upsert")
-    let save<'T> tableName (document: 'T) =
-        WithProps.save<'T> tableName document (fromDataSource ())
+    [<CompiledName "Save">]
+    let save<'TDoc> tableName (document: 'TDoc) =
+        WithProps.Document.save<'TDoc> tableName document (fromDataSource ())
 
 
 /// Queries to count documents
@@ -445,14 +595,22 @@ module Document =
 module Count =
     
     /// Count all documents in a table
+    [<CompiledName "All">]
     let all tableName =
         WithProps.Count.all tableName (fromDataSource ())
     
+    /// Count matching documents using a JSON field comparison query (->> =)
+    [<CompiledName "ByField">]
+    let byField tableName fieldName op (value: obj) =
+        WithProps.Count.byField tableName fieldName op value (fromDataSource ())
+    
     /// Count matching documents using a JSON containment query (@>)
+    [<CompiledName "ByContains">]
     let byContains tableName criteria =
         WithProps.Count.byContains tableName criteria (fromDataSource ())
 
     /// Count matching documents using a JSON Path match query (@?)
+    [<CompiledName "ByJsonPath">]
     let byJsonPath tableName jsonPath =
         WithProps.Count.byJsonPath tableName jsonPath (fromDataSource ())
 
@@ -462,14 +620,22 @@ module Count =
 module Exists =
 
     /// Determine if a document exists for the given ID
+    [<CompiledName "ById">]
     let byId tableName docId =
         WithProps.Exists.byId tableName docId (fromDataSource ())
     
-    /// Determine if a document exists using a JSON containment query (@>)
+    /// Determine if documents exist using a JSON field comparison query (->> =)
+    [<CompiledName "ByField">]
+    let byField tableName fieldName op (value: obj) =
+        WithProps.Exists.byField tableName fieldName op value (fromDataSource ())
+    
+    /// Determine if documents exist using a JSON containment query (@>)
+    [<CompiledName "ByContains">]
     let byContains tableName criteria =
         WithProps.Exists.byContains tableName criteria (fromDataSource ())
 
-    /// Determine if a document exists using a JSON Path match query (@?)
+    /// Determine if documents exist using a JSON Path match query (@?)
+    [<CompiledName "ByJsonPath">]
     let byJsonPath tableName jsonPath =
         WithProps.Exists.byJsonPath tableName jsonPath (fromDataSource ())
 
@@ -479,28 +645,76 @@ module Exists =
 module Find =
     
     /// Retrieve all documents in the given table
-    let all<'T> tableName =
-        WithProps.Find.all<'T> tableName (fromDataSource ())
+    [<CompiledName "FSharpAll">]
+    let all<'TDoc> tableName =
+        WithProps.Find.all<'TDoc> tableName (fromDataSource ())
 
-    /// Retrieve a document by its ID
-    let byId<'T> tableName docId =
-        WithProps.Find.byId<'T> tableName docId (fromDataSource ())
+    /// Retrieve all documents in the given table
+    let All<'TDoc> tableName =
+        WithProps.Find.All<'TDoc>(tableName, fromDataSource ())
 
-    /// Execute a JSON containment query (@>)
-    let byContains<'T> tableName criteria =
-        WithProps.Find.byContains<'T> tableName criteria (fromDataSource ())
+    /// Retrieve a document by its ID; returns None if not found
+    [<CompiledName "FSharpById">]
+    let byId<'TKey, 'TDoc> tableName docId =
+        WithProps.Find.byId<'TKey, 'TDoc> tableName docId (fromDataSource ())
 
-    /// Execute a JSON Path match query (@?)
-    let byJsonPath<'T> tableName jsonPath =
-        WithProps.Find.byJsonPath<'T> tableName jsonPath (fromDataSource ())
+    /// Retrieve a document by its ID; returns null if not found
+    let ById<'TKey, 'TDoc when 'TDoc: null>(tableName, docId: 'TKey) =
+        WithProps.Find.ById<'TKey, 'TDoc>(tableName, docId, fromDataSource ())
+
+    /// Retrieve documents matching a JSON field comparison query (->> =)
+    [<CompiledName "FSharpByField">]
+    let byField<'TDoc> tableName fieldName op (value: obj) =
+        WithProps.Find.byField<'TDoc> tableName fieldName op value (fromDataSource ())
     
-    /// Execute a JSON containment query (@>), returning only the first result
-    let firstByContains<'T> tableName (criteria: obj) =
-        WithProps.Find.firstByContains<'T> tableName criteria (fromDataSource ())
+    /// Retrieve documents matching a JSON field comparison query (->> =)
+    let ByField<'TDoc>(tableName, fieldName, op, value: obj) =
+        WithProps.Find.ByField<'TDoc>(tableName, fieldName, op, value, fromDataSource ())
+    
+    /// Retrieve documents matching a JSON containment query (@>)
+    [<CompiledName "FSharpByContains">]
+    let byContains<'TDoc> tableName (criteria: obj) =
+        WithProps.Find.byContains<'TDoc> tableName criteria (fromDataSource ())
 
-    /// Execute a JSON Path match query (@?), returning only the first result
-    let firstByJsonPath<'T> tableName jsonPath =
-        WithProps.Find.firstByJsonPath<'T> tableName jsonPath (fromDataSource ())
+    /// Retrieve documents matching a JSON containment query (@>)
+    let ByContains<'TDoc>(tableName, criteria: obj) =
+        WithProps.Find.ByContains<'TDoc>(tableName, criteria, fromDataSource ())
+
+    /// Retrieve documents matching a JSON Path match query (@?)
+    [<CompiledName "FSharpByJsonPath">]
+    let byJsonPath<'TDoc> tableName jsonPath =
+        WithProps.Find.byJsonPath<'TDoc> tableName jsonPath (fromDataSource ())
+    
+    /// Retrieve documents matching a JSON Path match query (@?)
+    let ByJsonPath<'TDoc>(tableName, jsonPath) =
+        WithProps.Find.ByJsonPath<'TDoc>(tableName, jsonPath, fromDataSource ())
+    
+    /// Retrieve the first document matching a JSON field comparison query (->> =); returns None if not found
+    [<CompiledName "FSharpFirstByField">]
+    let firstByField<'TDoc> tableName fieldName op (value: obj) =
+        WithProps.Find.firstByField<'TDoc> tableName fieldName op value (fromDataSource ())
+    
+    /// Retrieve the first document matching a JSON field comparison query (->> =); returns null if not found
+    let FirstByField<'TDoc when 'TDoc: null>(tableName, fieldName, op, value: obj) =
+        WithProps.Find.FirstByField<'TDoc>(tableName, fieldName, op, value, fromDataSource ())
+    
+    /// Retrieve the first document matching a JSON containment query (@>); returns None if not found
+    [<CompiledName "FSharpFirstByContains">]
+    let firstByContains<'TDoc> tableName (criteria: obj) =
+        WithProps.Find.firstByContains<'TDoc> tableName criteria (fromDataSource ())
+
+    /// Retrieve the first document matching a JSON containment query (@>); returns null if not found
+    let FirstByContains<'TDoc when 'TDoc: null>(tableName, criteria: obj) =
+        WithProps.Find.FirstByContains<'TDoc>(tableName, criteria, fromDataSource ())
+
+    /// Retrieve the first document matching a JSON Path match query (@?); returns None if not found
+    [<CompiledName "FSharpFirstByJsonPath">]
+    let firstByJsonPath<'TDoc> tableName jsonPath =
+        WithProps.Find.firstByJsonPath<'TDoc> tableName jsonPath (fromDataSource ())
+
+    /// Retrieve the first document matching a JSON Path match query (@?); returns null if not found
+    let FirstByJsonPath<'TDoc when 'TDoc: null>(tableName, jsonPath) =
+        WithProps.Find.FirstByJsonPath<'TDoc>(tableName, jsonPath, fromDataSource ())
 
 
 /// Commands to update documents
@@ -508,23 +722,37 @@ module Find =
 module Update =
 
     /// Update a full document
-    let full<'T> tableName docId (document: 'T) =
-        WithProps.Update.full<'T> tableName docId document (fromDataSource ())
+    [<CompiledName "Full">]
+    let full tableName (docId: 'TKey) (document: 'TDoc) =
+        WithProps.Update.full tableName docId document (fromDataSource ())
 
     /// Update a full document
-    let fullFunc<'T> tableName idFunc (document: 'T) =
-        WithProps.Update.fullFunc<'T> tableName idFunc document (fromDataSource ())
+    [<CompiledName "FSharpFullFunc">]
+    let fullFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
+        WithProps.Update.fullFunc tableName idFunc document (fromDataSource ())
+
+    /// Update a full document
+    let FullFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc) =
+        WithProps.Update.FullFunc(tableName, idFunc, document, fromDataSource ())
 
     /// Update a partial document
-    let partialById tableName docId (partial: obj) =
+    [<CompiledName "PartialById">]
+    let partialById tableName (docId: 'TKey) (partial: 'TPartial) =
         WithProps.Update.partialById tableName docId partial (fromDataSource ())
     
+    /// Update partial documents using a JSON field comparison query in the WHERE clause (->> =)
+    [<CompiledName "PartialByField">]
+    let partialByField tableName fieldName op (value: obj) (partial: 'TPartial) =
+        WithProps.Update.partialByField tableName fieldName op value partial (fromDataSource ())
+    
     /// Update partial documents using a JSON containment query in the WHERE clause (@>)
-    let partialByContains tableName (criteria: obj) (partial: obj) =
+    [<CompiledName "PartialByContains">]
+    let partialByContains tableName (criteria: 'TCriteria) (partial: 'TPartial) =
         WithProps.Update.partialByContains tableName criteria partial (fromDataSource ())
     
     /// Update partial documents using a JSON Path match query in the WHERE clause (@?)
-    let partialByJsonPath tableName jsonPath (partial: obj) =
+    [<CompiledName "PartialByJsonPath">]
+    let partialByJsonPath tableName jsonPath (partial: 'TPartial) =
         WithProps.Update.partialByJsonPath tableName jsonPath partial (fromDataSource ())
 
 
@@ -533,34 +761,21 @@ module Update =
 module Delete =
     
     /// Delete a document by its ID
-    let byId tableName docId =
+    [<CompiledName "ById">]
+    let byId tableName (docId: 'TKey) =
         WithProps.Delete.byId tableName docId (fromDataSource ())
 
-    /// Delete documents by matching a JSON contains query (@>)
-    let byContains tableName (criteria: obj) =
+    /// Delete documents by matching a JSON field comparison query (->> =)
+    [<CompiledName "ByField">]
+    let byField tableName fieldName op (value: obj) =
+        WithProps.Delete.byField tableName fieldName op value (fromDataSource ())
+    
+    /// Delete documents by matching a JSON containment query (@>)
+    [<CompiledName "ByContains">]
+    let byContains tableName (criteria: 'TContains) =
         WithProps.Delete.byContains tableName criteria (fromDataSource ())
 
     /// Delete documents by matching a JSON Path match query (@?)
+    [<CompiledName "ByJsonPath">]
     let byJsonPath tableName path =
         WithProps.Delete.byJsonPath tableName path (fromDataSource ())
-
-    
-/// Commands to execute custom SQL queries
-[<RequireQualifiedAccess>]
-module Custom =
-
-    /// Execute a query that returns one or no results
-    let single<'T> query parameters (mapFunc: RowReader ->  'T) =
-        WithProps.Custom.single query parameters mapFunc (fromDataSource ())
-
-    /// Execute a query that returns a list of results
-    let list<'T> query parameters (mapFunc: RowReader -> 'T) =
-        WithProps.Custom.list query parameters mapFunc (fromDataSource ())
-
-    /// Execute a query that returns no results
-    let nonQuery query parameters =
-        WithProps.Custom.nonQuery query parameters (fromDataSource ())
-
-    /// Execute a query that returns a scalar value
-    let scalar<'T when 'T: struct> query parameters (mapFunc: RowReader -> 'T) =
-        WithProps.Custom.scalar query parameters mapFunc (fromDataSource ())

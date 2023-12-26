@@ -10,6 +10,28 @@ open Types
 /// Unit tests for the SQLite library
 let unitTests =
     testList "Unit" [
+        testList "Query" [
+            test "Definition.ensureTable succeeds" {
+                Expect.equal
+                    (Query.Definition.ensureTable "tbl")
+                    "CREATE TABLE IF NOT EXISTS tbl (data TEXT NOT NULL)"
+                    "CREATE TABLE statement not correct"
+            }
+            testList "Update" [
+                test "partialById succeeds" {
+                    Expect.equal
+                        (Query.Update.partialById "tbl")
+                        "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Id' = @id"
+                        "UPDATE partial by ID statement not correct"
+                }
+                test "partialByField succeeds" {
+                    Expect.equal
+                        (Query.Update.partialByField "tbl" "Part" NE)
+                        "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field"
+                        "UPDATE partial by JSON comparison query not correct"
+                }
+            ]
+        ]
         testList "Parameters" [
             test "idParam succeeds" {
                 let theParam = idParam 7

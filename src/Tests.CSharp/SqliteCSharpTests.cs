@@ -19,6 +19,29 @@ public static class SqliteCSharpTests
     public static Test Unit =
         TestList("Unit", new[]
         {
+            TestList("Query", new[]
+            {
+                TestCase("Definition.EnsureTable succeeds", () =>
+                {
+                    Expect.equal(Sqlite.Query.Definition.EnsureTable("tbl"),
+                        "CREATE TABLE IF NOT EXISTS tbl (data TEXT NOT NULL)", "CREATE TABLE statement not correct");
+                }),
+                TestList("Update", new[]
+                {
+                    TestCase("PartialById succeeds", () =>
+                    {
+                        Expect.equal(Sqlite.Query.Update.PartialById("tbl"),
+                            "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Id' = @id",
+                            "UPDATE partial by ID statement not correct");
+                    }),
+                    TestCase("PartialByField succeeds", () =>
+                    {
+                        Expect.equal(Sqlite.Query.Update.PartialByField("tbl", "Part", Op.NE),
+                            "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field",
+                            "UPDATE partial by JSON comparison query not correct");
+                    })
+                }),
+            }),
             TestList("Parameters", new[] 
             {
                 TestCase("Id succeeds", () =>

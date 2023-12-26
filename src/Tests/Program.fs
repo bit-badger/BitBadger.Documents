@@ -6,6 +6,7 @@ let allTests =
         "BitBadger.Documents"
         [ CommonTests.all
           CommonCSharpTests.Unit
+          PostgresTests.all
           SqliteTests.all
           testSequenced SqliteExtensionTests.integrationTests
           SqliteCSharpTests.All

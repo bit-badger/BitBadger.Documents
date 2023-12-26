@@ -210,18 +210,6 @@ module Query =
         let full tableName =
             $"""UPDATE %s{tableName} SET data = @data WHERE {whereById "@id"}"""
 
-        /// Query to update a partial document by its ID
-        [<CompiledName "PartialById">]
-        let partialById tableName =
-            $"""UPDATE %s{tableName} SET data = json_patch(data, json(@data)) WHERE {whereById "@id"}"""
-            
-        /// Query to update a partial document via a comparison on a JSON field
-        [<CompiledName "PartialByField">]
-        let partialByField tableName fieldName op =
-            sprintf
-                "UPDATE %s SET data = json_patch(data, json(@data)) WHERE %s"
-                tableName (whereByField fieldName op "@field")
-        
     /// Queries to delete documents
     module Delete =
         
