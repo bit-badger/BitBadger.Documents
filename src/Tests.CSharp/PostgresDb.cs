@@ -134,8 +134,8 @@ public static class PostgresDb
 
         var sqlProps = Sql.connect(database.ConnectionString);
 
-        Sql.executeNonQuery(Sql.query(Definition.createTable(TableName), sqlProps));
-        Sql.executeNonQuery(Sql.query(Definition.createKey(TableName), sqlProps));
+        Sql.executeNonQuery(Sql.query(Postgres.Query.Definition.EnsureTable(TableName), sqlProps));
+        Sql.executeNonQuery(Sql.query(Query.Definition.EnsureKey(TableName), sqlProps));
 
         Postgres.Configuration.useDataSource(MkDataSource(database.ConnectionString));
 

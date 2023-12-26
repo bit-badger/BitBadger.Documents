@@ -8,105 +8,121 @@ open BitBadger.Documents.Tests
 /// Tests which do not hit the database
 let unitTests =
     testList "Unit" [
-        testList "Definition" [
-            test "createTable succeeds" {
-                Expect.equal (Definition.createTable PostgresDb.TableName)
-                    $"CREATE TABLE IF NOT EXISTS {PostgresDb.TableName} (data JSONB NOT NULL)"
-                    "CREATE TABLE statement not constructed correctly"
+        testList "Parameters" [
+            test "idParam succeeds" {
+                Expect.equal (idParam 88) ("@id", Sql.string "88") "ID parameter not constructed correctly"
             }
-            test "createKey succeeds" {
-                Expect.equal (Definition.createKey PostgresDb.TableName)
-                    $"CREATE UNIQUE INDEX IF NOT EXISTS idx_{PostgresDb.TableName}_key ON {PostgresDb.TableName} ((data ->> 'Id'))"
-                    "CREATE INDEX for key statement not constructed correctly"
+            test "jsonParam succeeds" {
+                Expect.equal
+                    (jsonParam "@test" {| Something = "good" |})
+                    ("@test", Sql.jsonb """{"Something":"good"}""")
+                    "JSON parameter not constructed correctly"
             }
-            test "createIndex succeeds for full index" {
-                Expect.equal (Definition.createIndex "schema.tbl" Full)
-                    "CREATE INDEX IF NOT EXISTS idx_tbl ON schema.tbl USING GIN (data)"
-                    "CREATE INDEX statement not constructed correctly"
+            test "fieldParam succeeds" {
+                let it = fieldParam 242
+                Expect.equal (fst it) "@field" "Field parameter name not correct"
+                match snd it with
+                | SqlValue.Parameter value ->
+                    Expect.equal value.ParameterName "@field" "Parameter name not correct"
+                    Expect.equal value.Value 242 "Parameter value not correct"
+                | _ -> Expect.isTrue false "The parameter was not a Parameter type"
             }
-            test "createIndex succeeds for JSONB Path Ops index" {
-                Expect.equal (Definition.createIndex PostgresDb.TableName Optimized)
-                    $"CREATE INDEX IF NOT EXISTS idx_{PostgresDb.TableName} ON {PostgresDb.TableName} USING GIN (data jsonb_path_ops)"
-                    "CREATE INDEX statement not constructed correctly"
+            test "noParams succeeds" {
+                Expect.isEmpty noParams "The no-params sequence should be empty"
             }
         ]
         testList "Query" [
+            testList "Definition" [
+                test "ensureTable succeeds" {
+                    Expect.equal
+                        (Query.Definition.ensureTable PostgresDb.TableName)
+                        $"CREATE TABLE IF NOT EXISTS {PostgresDb.TableName} (data JSONB NOT NULL)"
+                        "CREATE TABLE statement not constructed correctly"
+                }
+                test "ensureJsonIndex succeeds for full index" {
+                    Expect.equal
+                        (Query.Definition.ensureJsonIndex "schema.tbl" Full)
+                        "CREATE INDEX IF NOT EXISTS idx_tbl_document ON schema.tbl USING GIN (data)"
+                        "CREATE INDEX statement not constructed correctly"
+                }
+                test "ensureJsonIndex succeeds for JSONB Path Ops index" {
+                    Expect.equal
+                        (Query.Definition.ensureJsonIndex PostgresDb.TableName Optimized)
+                        (sprintf "CREATE INDEX IF NOT EXISTS idx_%s_document ON %s USING GIN (data jsonb_path_ops)"
+                            PostgresDb.TableName PostgresDb.TableName)
+                        "CREATE INDEX statement not constructed correctly"
+                }
+            ]
             test "whereDataContains succeeds" {
                 Expect.equal (Query.whereDataContains "@test") "data @> @test" "WHERE clause not correct"
             }
             test "whereJsonPathMatches succeeds" {
                 Expect.equal (Query.whereJsonPathMatches "@path") "data @? @path::jsonpath" "WHERE clause not correct"
             }
-            test "jsonbDocParam succeeds" {
-                Expect.equal (Query.jsonbDocParam {| Hello = "There" |}) (Sql.jsonb "{\"Hello\":\"There\"}")
-                    "JSONB document not serialized correctly"
-            }
-            test "docParameters succeeds" {
-                let parameters = Query.docParameters "abc123" {| Testing = 456 |}
-                let expected = [
-                    "@id", Sql.string "abc123"
-                    "@data", Sql.jsonb "{\"Testing\":456}"
-                ]
-                Expect.equal parameters expected "There should have been 2 parameters, one string and one JSONB"
-            }
-            test "insert succeeds" {
-                Expect.equal (Query.insert PostgresDb.TableName) $"INSERT INTO {PostgresDb.TableName} VALUES (@data)"
-                    "INSERT statement not correct"
-            }
-            test "save succeeds" {
-                Expect.equal (Query.save PostgresDb.TableName)
-                    $"INSERT INTO {PostgresDb.TableName} VALUES (@data) ON CONFLICT ((data ->> 'Id')) DO UPDATE SET data = EXCLUDED.data"
-                    "INSERT ON CONFLICT UPDATE statement not correct"
-            }
             testList "Count" [
                 test "byContains succeeds" {
-                    Expect.equal (Query.Count.byContains PostgresDb.TableName)
+                    Expect.equal
+                        (Query.Count.byContains PostgresDb.TableName)
                         $"SELECT COUNT(*) AS it FROM {PostgresDb.TableName} WHERE data @> @criteria"
                         "JSON containment count query not correct"
                 }
                 test "byJsonPath succeeds" {
-                    Expect.equal (Query.Count.byJsonPath PostgresDb.TableName)
+                    Expect.equal
+                        (Query.Count.byJsonPath PostgresDb.TableName)
                         $"SELECT COUNT(*) AS it FROM {PostgresDb.TableName} WHERE data @? @path::jsonpath"
                         "JSON Path match count query not correct"
                 }
             ]
             testList "Exists" [
                 test "byContains succeeds" {
-                    Expect.equal (Query.Exists.byContains PostgresDb.TableName)
+                    Expect.equal
+                        (Query.Exists.byContains PostgresDb.TableName)
                         $"SELECT EXISTS (SELECT 1 FROM {PostgresDb.TableName} WHERE data @> @criteria) AS it"
                         "JSON containment exists query not correct"
                 }
                 test "byJsonPath succeeds" {
-                    Expect.equal (Query.Exists.byJsonPath PostgresDb.TableName)
+                    Expect.equal
+                        (Query.Exists.byJsonPath PostgresDb.TableName)
                         $"SELECT EXISTS (SELECT 1 FROM {PostgresDb.TableName} WHERE data @? @path::jsonpath) AS it"
                         "JSON Path match existence query not correct"
                 }
             ]
             testList "Find" [
                 test "byContains succeeds" {
-                    Expect.equal (Query.Find.byContains PostgresDb.TableName)
+                    Expect.equal
+                        (Query.Find.byContains PostgresDb.TableName)
                         $"SELECT data FROM {PostgresDb.TableName} WHERE data @> @criteria"
                         "SELECT by JSON containment query not correct"
                 }
                 test "byJsonPath succeeds" {
-                    Expect.equal (Query.Find.byJsonPath PostgresDb.TableName)
+                    Expect.equal
+                        (Query.Find.byJsonPath PostgresDb.TableName)
                         $"SELECT data FROM {PostgresDb.TableName} WHERE data @? @path::jsonpath"
                         "SELECT by JSON Path match query not correct"
                 }
             ]
             testList "Update" [
                 test "partialById succeeds" {
-                    Expect.equal (Query.Update.partialById PostgresDb.TableName)
+                    Expect.equal
+                        (Query.Update.partialById PostgresDb.TableName)
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data ->> 'Id' = @id"
                         "UPDATE partial by ID statement not correct"
                 }
+                test "partialByField succeeds" {
+                    Expect.equal
+                        (Query.Update.partialByField PostgresDb.TableName "Snail" LT)
+                        $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data ->> 'Snail' < @field"
+                        "UPDATE partial by ID statement not correct"
+                }
                 test "partialByContains succeeds" {
-                    Expect.equal (Query.Update.partialByContains PostgresDb.TableName)
+                    Expect.equal
+                        (Query.Update.partialByContains PostgresDb.TableName)
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data @> @criteria"
                         "UPDATE partial by JSON containment statement not correct"
                 }
                 test "partialByJsonPath succeeds" {
-                    Expect.equal (Query.Update.partialByJsonPath PostgresDb.TableName)
+                    Expect.equal
+                        (Query.Update.partialByJsonPath PostgresDb.TableName)
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data @? @path::jsonpath"
                         "UPDATE partial by JSON Path statement not correct"
                 }
@@ -126,7 +142,6 @@ let unitTests =
         ]
     ]
 
-open Npgsql.FSharp
 open ThrowawayDb.Postgres
 open Types
 
@@ -163,17 +178,82 @@ let integrationTests =
                     "Data source should have been the same"
             }
         ]
+        testList "Custom" [
+            testList "list" [
+                testTask "succeeds when data is found" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    let! docs = Custom.list (Query.selectFromTable PostgresDb.TableName) [] fromData<JsonDocument>
+                    Expect.hasCountOf docs 5u isTrue "There should have been 5 documents returned"
+                }
+                testTask "succeeds when data is not found" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    let! docs =
+                        Custom.list $"SELECT data FROM {PostgresDb.TableName} WHERE data @? @path::jsonpath"
+                                    [ "@path", Sql.string "$.NumValue ? (@ > 100)" ] fromData<JsonDocument>
+                    Expect.isEmpty docs "There should have been no documents returned"
+                }
+            ]
+            testList "single" [
+                testTask "succeeds when a row is found" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    let! doc =
+                        Custom.single $"SELECT data FROM {PostgresDb.TableName} WHERE data ->> 'Id' = @id"
+                                      [ "@id", Sql.string "one"] fromData<JsonDocument>
+                    Expect.isSome doc "There should have been a document returned"
+                    Expect.equal doc.Value.Id "one" "The incorrect document was returned"
+                }
+                testTask "succeeds when a row is not found" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    let! doc =
+                        Custom.single $"SELECT data FROM {PostgresDb.TableName} WHERE data ->> 'Id' = @id"
+                                      [ "@id", Sql.string "eighty" ] fromData<JsonDocument>
+                    Expect.isNone doc "There should not have been a document returned"
+                }
+            ]
+            testList "nonQuery" [
+                testTask "succeeds when operating on data" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! Custom.nonQuery $"DELETE FROM {PostgresDb.TableName}" []
+
+                    let! remaining = Count.all PostgresDb.TableName
+                    Expect.equal remaining 0 "There should be no documents remaining in the table"
+                }
+                testTask "succeeds when no data matches where clause" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! Custom.nonQuery $"DELETE FROM {PostgresDb.TableName} WHERE data @? @path::jsonpath"
+                                        [ "@path", Sql.string "$.NumValue ? (@ > 100)" ]
+
+                    let! remaining = Count.all PostgresDb.TableName
+                    Expect.equal remaining 5 "There should be 5 documents remaining in the table"
+                }
+            ]
+            testTask "scalar succeeds" {
+                use db = PostgresDb.BuildDb()
+
+                let! nbr = Custom.scalar $"SELECT 5 AS test_value" [] (fun row -> row.int "test_value")
+                Expect.equal nbr 5 "The query should have returned the number 5"
+            }
+        ]
         testList "Definition" [
             testTask "ensureTable succeeds" {
                 use db = PostgresDb.BuildDb()
                 let tableExists () =
-                    Sql.connect db.ConnectionString
-                    |> Sql.query "SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'ensured') AS it"
-                    |> Sql.executeRowAsync (fun row -> row.bool "it")
+                    Custom.scalar "SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'ensured') AS it" [] toExists
                 let keyExists () =
-                    Sql.connect db.ConnectionString
-                    |> Sql.query "SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_ensured_key') AS it"
-                    |> Sql.executeRowAsync (fun row -> row.bool "it")
+                    Custom.scalar
+                        "SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_ensured_key') AS it" [] toExists
                 
                 let! exists     = tableExists ()
                 let! alsoExists = keyExists ()
@@ -186,21 +266,37 @@ let integrationTests =
                 Expect.isTrue exists'    "The table should now exist"
                 Expect.isTrue alsoExists' "The key index should now exist"
             }
-            testTask "ensureIndex succeeds" {
+            testTask "ensureJsonIndex succeeds" {
                 use db = PostgresDb.BuildDb()
                 let indexExists () =
-                    Sql.connect db.ConnectionString
-                    |> Sql.query "SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_ensured') AS it"
-                    |> Sql.executeRowAsync (fun row -> row.bool "it")
+                    Custom.scalar
+                        "SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_ensured_document') AS it"
+                        []
+                        toExists
                 
                 let! exists = indexExists ()
                 Expect.isFalse exists "The index should not exist already"
 
-                do! Definition.ensureTable "ensured"
-                do! Definition.ensureIndex "ensured" Optimized
+                do! Definition.ensureTable     "ensured"
+                do! Definition.ensureJsonIndex "ensured" Optimized
                 let! exists' = indexExists ()
                 Expect.isTrue exists' "The index should now exist"
                 // TODO: check for GIN(jsonp_path_ops), write test for "full" index that checks for their absence
+            }
+            testTask "ensureFieldIndex succeeds" {
+                use db = PostgresDb.BuildDb()
+                let indexExists () =
+                    Custom.scalar
+                        "SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_ensured_test') AS it" [] toExists
+                
+                let! exists = indexExists ()
+                Expect.isFalse exists "The index should not exist already"
+
+                do! Definition.ensureTable      "ensured"
+                do! Definition.ensureFieldIndex "ensured" "test" [ "Id"; "Category" ]
+                let! exists' = indexExists ()
+                Expect.isTrue exists' "The index should now exist"
+                // TODO: check for field definition
             }
         ]
         testList "insert" [
@@ -217,8 +313,11 @@ let integrationTests =
             testTask "fails for duplicate key" {
                 use db = PostgresDb.BuildDb()
                 do! insert PostgresDb.TableName { emptyDoc with Id = "test" }
-                Expect.throws (fun () ->
-                    insert PostgresDb.TableName {emptyDoc with Id = "test" } |> Async.AwaitTask |> Async.RunSynchronously)
+                Expect.throws
+                    (fun () ->
+                        insert PostgresDb.TableName {emptyDoc with Id = "test" }
+                        |> Async.AwaitTask
+                        |> Async.RunSynchronously)
                     "An exception should have been raised for duplicate document ID insert"
             }
         ]
@@ -257,6 +356,13 @@ let integrationTests =
                 let! theCount = Count.all PostgresDb.TableName
                 Expect.equal theCount 5 "There should have been 5 matching documents"
             }
+            testTask "byField succeeds" {
+                use db = PostgresDb.BuildDb()
+                do! loadDocs ()
+                
+                let! theCount = Count.byField PostgresDb.TableName "Value" EQ "purple"
+                Expect.equal theCount 2 "There should have been 2 matching documents"
+            }
             testTask "byContains succeeds" {
                 use db = PostgresDb.BuildDb()
                 do! loadDocs ()
@@ -287,6 +393,22 @@ let integrationTests =
 
                     let! exists = Exists.byId PostgresDb.TableName "seven"
                     Expect.isFalse exists "There should not have been an existing document"
+                }
+            ]
+            testList "byField" [
+                testTask "succeeds when documents exist" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    let! exists = Exists.byField PostgresDb.TableName "Sub" EX ""
+                    Expect.isTrue exists "There should have been existing documents"
+                }
+                testTask "succeeds when documents do not exist" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    let! exists = Exists.byField PostgresDb.TableName "NumValue" EQ "six"
+                    Expect.isFalse exists "There should not have been existing documents"
                 }
             ]
             testList "byContains" [
@@ -605,76 +727,8 @@ let integrationTests =
                 }
             ]
         ]
-        testList "Custom" [
-            testList "single" [
-                testTask "succeeds when a row is found" {
-                    use db = PostgresDb.BuildDb()
-                    do! loadDocs ()
-
-                    let! doc =
-                        Custom.single $"SELECT data FROM {PostgresDb.TableName} WHERE data ->> 'Id' = @id"
-                                      [ "@id", Sql.string "one"] fromData<JsonDocument>
-                    Expect.isSome doc "There should have been a document returned"
-                    Expect.equal doc.Value.Id "one" "The incorrect document was returned"
-                }
-                testTask "succeeds when a row is not found" {
-                    use db = PostgresDb.BuildDb()
-                    do! loadDocs ()
-
-                    let! doc =
-                        Custom.single $"SELECT data FROM {PostgresDb.TableName} WHERE data ->> 'Id' = @id"
-                                      [ "@id", Sql.string "eighty" ] fromData<JsonDocument>
-                    Expect.isNone doc "There should not have been a document returned"
-                }
-            ]
-            testList "list" [
-                testTask "succeeds when data is found" {
-                    use db = PostgresDb.BuildDb()
-                    do! loadDocs ()
-
-                    let! docs = Custom.list (Query.selectFromTable PostgresDb.TableName) [] fromData<JsonDocument>
-                    Expect.hasCountOf docs 5u isTrue "There should have been 5 documents returned"
-                }
-                testTask "succeeds when data is not found" {
-                    use db = PostgresDb.BuildDb()
-                    do! loadDocs ()
-
-                    let! docs =
-                        Custom.list $"SELECT data FROM {PostgresDb.TableName} WHERE data @? @path::jsonpath"
-                                    [ "@path", Sql.string "$.NumValue ? (@ > 100)" ] fromData<JsonDocument>
-                    Expect.isEmpty docs "There should have been no documents returned"
-                }
-            ]
-            testList "nonQuery" [
-                testTask "succeeds when operating on data" {
-                    use db = PostgresDb.BuildDb()
-                    do! loadDocs ()
-
-                    do! Custom.nonQuery $"DELETE FROM {PostgresDb.TableName}" []
-
-                    let! remaining = Count.all PostgresDb.TableName
-                    Expect.equal remaining 0 "There should be no documents remaining in the table"
-                }
-                testTask "succeeds when no data matches where clause" {
-                    use db = PostgresDb.BuildDb()
-                    do! loadDocs ()
-
-                    do! Custom.nonQuery $"DELETE FROM {PostgresDb.TableName} WHERE data @? @path::jsonpath"
-                                        [ "@path", Sql.string "$.NumValue ? (@ > 100)" ]
-
-                    let! remaining = Count.all PostgresDb.TableName
-                    Expect.equal remaining 5 "There should be 5 documents remaining in the table"
-                }
-            ]
-            testTask "scalar succeeds" {
-                use db = PostgresDb.BuildDb()
-
-                let! nbr = Custom.scalar $"SELECT 5 AS test_value" [] (fun row -> row.int "test_value")
-                Expect.equal nbr 5 "The query should have returned the number 5"
-            }
-        ]
     ]
     |> testSequenced
 
 
-let all = testList "FSharp.Documents" [ unitTests; integrationTests ]
+let all = testList "Postgres" [ unitTests; integrationTests ]

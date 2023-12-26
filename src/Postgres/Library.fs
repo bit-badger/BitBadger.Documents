@@ -1,7 +1,5 @@
 ﻿namespace BitBadger.Documents.Postgres
 
-open Npgsql
-
 /// The type of index to generate for the document
 [<Struct>]
 type DocumentIndex =
@@ -11,11 +9,13 @@ type DocumentIndex =
     | Optimized
 
 
+open Npgsql
+
 /// Configuration for document handling
 module Configuration =
 
     /// The data source to use for query execution
-    let mutable private dataSourceValue : Npgsql.NpgsqlDataSource option = None
+    let mutable private dataSourceValue : NpgsqlDataSource option = None
 
     /// Register a data source to use for query execution (disposes the current one if it exists)
     let useDataSource source =
@@ -38,10 +38,8 @@ module private Helpers =
     let internal fromDataSource () =
         Configuration.dataSource () |> Sql.fromDataSource
 
-    open System.Threading.Tasks
-
     /// Execute a task and ignore the result
-    let internal ignoreTask<'T> (it : Task<'T>) = backgroundTask {
+    let internal ignoreTask<'T> (it : System.Threading.Tasks.Task<'T>) = backgroundTask {
         let! _ = it
         ()
     }
@@ -49,50 +47,36 @@ module private Helpers =
 
 open BitBadger.Documents
 
-/// Data definition
-[<RequireQualifiedAccess>]
-module Definition =
-
-    /// SQL statement to create a document table
-    let createTable name =
-        $"CREATE TABLE IF NOT EXISTS %s{name} (data JSONB NOT NULL)"
+/// Functions for creating parameters
+[<AutoOpen>]
+module Parameters =
     
-    /// SQL statement to create a key index for a document table
-    let createKey (name : string) =
-        let tableName = name.Split(".") |> Array.last
-        $"CREATE UNIQUE INDEX IF NOT EXISTS idx_{tableName}_key ON {name} ((data ->> '{Configuration.idField ()}'))"
-        
-    /// SQL statement to create an index on documents in the specified table
-    let createIndex (name : string) idxType =
-        let extraOps = match idxType with Full -> "" | Optimized -> " jsonb_path_ops"
-        let tableName = name.Split(".") |> Array.last
-        $"CREATE INDEX IF NOT EXISTS idx_{tableName} ON {name} USING GIN (data{extraOps})"
-    
-    /// Definitions that take SqlProps as their last parameter
-    module WithProps =
-        
-        /// Create a document table
-        let ensureTable name sqlProps = backgroundTask {
-            do! sqlProps |> Sql.query (createTable name) |> Sql.executeNonQueryAsync |> ignoreTask
-            do! sqlProps |> Sql.query (createKey   name) |> Sql.executeNonQueryAsync |> ignoreTask
-        }
+    /// Create an ID parameter (name "@id", key will be treated as a string)
+    [<CompiledName "Id">]
+    let idParam (key: 'TKey) =
+        "@id", Sql.string (string key)
 
-        /// Create an index on documents in the specified table
-        let ensureIndex name idxType sqlProps =
-            sqlProps |> Sql.query (createIndex name idxType) |> Sql.executeNonQueryAsync |> ignoreTask
-    
-    /// Create a document table
-    let ensureTable name =
-        WithProps.ensureTable name (fromDataSource ())
-    
-    let ensureIndex name idxType =
-        WithProps.ensureIndex name idxType (fromDataSource ())
+    /// Create a parameter with a JSON value
+    [<CompiledName "Json">]
+    let jsonParam (name: string) (it: 'TJson) =
+        name, Sql.jsonb (Configuration.serializer().Serialize it)
 
+    /// Create a JSON field parameter (name "@field")
+    [<CompiledName "Field">]
+    let fieldParam (value: obj) =
+        "@field", Sql.parameter (NpgsqlParameter("@field", value))
 
+    /// An empty parameter sequence
+    [<CompiledName "None">]
+    let noParams =
+        Seq.empty<string * SqlValue>
+
+    
 /// Query construction functions
 [<RequireQualifiedAccess>]
 module Query =
     
+    /// Table and index definition queries
     module Definition =
         
         /// SQL statement to create a document table
@@ -102,10 +86,10 @@ module Query =
         
         /// SQL statement to create an index on JSON documents in the specified table
         [<CompiledName "EnsureJsonIndex">]
-        let ensureJsonIndex (name : string) idxType =
+        let ensureJsonIndex (name: string) idxType =
             let extraOps = match idxType with Full -> "" | Optimized -> " jsonb_path_ops"
             let tableName = name.Split '.' |> Array.last
-            $"CREATE INDEX IF NOT EXISTS idx_{tableName} ON {name} USING GIN (data{extraOps})"
+            $"CREATE INDEX IF NOT EXISTS idx_{tableName}_document ON {name} USING GIN (data{extraOps})"
 
     /// Create a WHERE clause fragment to implement a @> (JSON contains) condition
     let whereDataContains paramName =
@@ -114,23 +98,6 @@ module Query =
     /// Create a WHERE clause fragment to implement a @? (JSON Path match) condition
     let whereJsonPathMatches paramName =
         $"data @? %s{paramName}::jsonpath"
-    
-    /// Create a JSONB document parameter
-    let jsonbDocParam (it: obj) =
-        Sql.jsonb (Configuration.serializer().Serialize it)
-
-    /// Create ID and data parameters for a query
-    let docParameters<'T> docId (doc: 'T) =
-        [ "@id", Sql.string docId; "@data", jsonbDocParam doc ]
-    
-    /// Query to insert a document
-    let insert tableName =
-        $"INSERT INTO %s{tableName} VALUES (@data)"
-
-    /// Query to save a document, inserting it if it does not exist and updating it if it does (AKA "upsert")
-    let save tableName =
-        sprintf "INSERT INTO %s VALUES (@data) ON CONFLICT ((data ->> '%s')) DO UPDATE SET data = EXCLUDED.data"
-                tableName (Configuration.idField ()) 
     
     /// Queries for counting documents
     module Count =
@@ -196,31 +163,6 @@ module Query =
             $"""DELETE FROM %s{tableName} WHERE {whereJsonPathMatches "@path"}"""
 
 
-/// Functions for creating parameters
-[<AutoOpen>]
-module Parameters =
-    
-    /// Create an ID parameter (name "@id", key will be treated as a string)
-    [<CompiledName "Id">]
-    let idParam (key: 'TKey) =
-        "@id", Sql.string (string key)
-
-    /// Create a parameter with a JSON value
-    [<CompiledName "Json">]
-    let jsonParam (name: string) (it: 'TJson) =
-        name, Sql.jsonb (Configuration.serializer().Serialize it)
-
-    /// Create a JSON field parameter (name "@field")
-    [<CompiledName "Field">]
-    let fieldParam (value: obj) =
-        "@field", Sql.parameter (NpgsqlParameter("@field", value))
-
-    /// An empty parameter sequence
-    [<CompiledName "None">]
-    let noParams =
-        Seq.empty<string * SqlValue>
-
-    
 /// Functions for dealing with results
 [<AutoOpen>]
 module Results =
@@ -251,28 +193,28 @@ module WithProps =
 
         /// Execute a query that returns a list of results
         [<CompiledName "FSharpList">]
-        let list<'T> query parameters (mapFunc: RowReader -> 'T) sqlProps =
+        let list<'TDoc> query parameters (mapFunc: RowReader -> 'TDoc) sqlProps =
             Sql.query query sqlProps
             |> Sql.parameters parameters
             |> Sql.executeAsync mapFunc
 
         /// Execute a query that returns a list of results
-        let List<'T>(query, parameters, mapFunc: System.Func<RowReader, 'T>, sqlProps) = backgroundTask {
-            let! results = list query (List.ofSeq parameters) mapFunc.Invoke sqlProps
+        let List<'TDoc>(query, parameters, mapFunc: System.Func<RowReader, 'TDoc>, sqlProps) = backgroundTask {
+            let! results = list<'TDoc> query (List.ofSeq parameters) mapFunc.Invoke sqlProps
             return ResizeArray results
         }
         
-        /// Execute a query that returns one or no results (returns None if not found)
+        /// Execute a query that returns one or no results; returns None if not found
         [<CompiledName "FSharpSingle">]
-        let single<'T> query parameters mapFunc sqlProps = backgroundTask {
-            let! results = list<'T> query parameters mapFunc sqlProps
+        let single<'TDoc> query parameters mapFunc sqlProps = backgroundTask {
+            let! results = list<'TDoc> query parameters mapFunc sqlProps
             return FSharp.Collections.List.tryHead results
         }
 
-        /// Execute a query that returns one or no results (returns null if not found)
-        let Single<'T when 'T: null>(
-                query, parameters, mapFunc: System.Func<RowReader, 'T>, sqlProps) = backgroundTask {
-            let! result = single<'T> query (FSharp.Collections.List.ofSeq parameters) mapFunc.Invoke sqlProps
+        /// Execute a query that returns one or no results; returns null if not found
+        let Single<'TDoc when 'TDoc: null>(
+                query, parameters, mapFunc: System.Func<RowReader, 'TDoc>, sqlProps) = backgroundTask {
+            let! result = single<'TDoc> query (FSharp.Collections.List.ofSeq parameters) mapFunc.Invoke sqlProps
             return Option.toObj result
         }
 
@@ -295,21 +237,25 @@ module WithProps =
         let Scalar<'T when 'T: struct>(query, parameters, mapFunc: System.Func<RowReader, 'T>, sqlProps) =
             scalar<'T> query (FSharp.Collections.List.ofSeq parameters) mapFunc.Invoke sqlProps
 
-    /// Execute a non-query statement to manipulate a document
-    let private executeNonQuery query (document: 'T) sqlProps =
-        sqlProps
-        |> Sql.query query
-        |> Sql.parameters [ "@data", Query.jsonbDocParam document ]
-        |> Sql.executeNonQueryAsync
-        |> ignoreTask
+    /// Table and index definition commands
+    module Definition =
+        
+        /// Create a document table
+        [<CompiledName "EnsureTable">]
+        let ensureTable name sqlProps = backgroundTask {
+            do! Custom.nonQuery (Query.Definition.ensureTable name) [] sqlProps
+            do! Custom.nonQuery (Query.Definition.ensureKey   name) [] sqlProps
+        }
 
-    /// Execute a non-query statement to manipulate a document with an ID specified
-    let private executeNonQueryWithId query docId (document: 'T) sqlProps =
-        sqlProps
-        |> Sql.query query
-        |> Sql.parameters (Query.docParameters docId document)
-        |> Sql.executeNonQueryAsync
-        |> ignoreTask
+        /// Create an index on documents in the specified table
+        [<CompiledName "EnsureJsonIndex">]
+        let ensureJsonIndex name idxType sqlProps =
+            Custom.nonQuery (Query.Definition.ensureJsonIndex name idxType) [] sqlProps
+        
+        /// Create an index on field(s) within documents in the specified table
+        [<CompiledName "EnsureFieldIndex">]
+        let ensureFieldIndex tableName indexName fields sqlProps =
+            Custom.nonQuery (Query.Definition.ensureIndexOn tableName indexName fields) [] sqlProps
 
     /// Commands to add documents
     [<AutoOpen>]
@@ -573,6 +519,26 @@ module Custom =
     /// Execute a query that returns a scalar value
     let Scalar<'T when 'T: struct>(query, parameters, mapFunc: System.Func<RowReader, 'T>) =
         WithProps.Custom.Scalar<'T>(query, parameters, mapFunc, fromDataSource ())
+
+
+/// Table and index definition commands
+[<RequireQualifiedAccess>]
+module Definition =
+    
+    /// Create a document table
+    [<CompiledName "EnsureTable">]
+    let ensureTable name =
+        WithProps.Definition.ensureTable name (fromDataSource ())
+
+    /// Create an index on documents in the specified table
+    [<CompiledName "EnsureJsonIndex">]
+    let ensureJsonIndex name idxType =
+        WithProps.Definition.ensureJsonIndex name idxType (fromDataSource ())
+    
+    /// Create an index on field(s) within documents in the specified table
+    [<CompiledName "EnsureFieldIndex">]
+    let ensureFieldIndex tableName indexName fields =
+        WithProps.Definition.ensureFieldIndex tableName indexName fields (fromDataSource ())
 
 
 /// Document writing functions
