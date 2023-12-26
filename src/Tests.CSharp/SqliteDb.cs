@@ -3,7 +3,7 @@ namespace BitBadger.Documents.Tests;
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using static Sqlite;
+using Sqlite;
 
 /// <summary>
 /// A throwaway SQLite database file, which will be deleted when it goes out of scope

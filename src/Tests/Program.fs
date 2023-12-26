@@ -7,7 +7,7 @@ let allTests =
         [ CommonTests.all
           CommonCSharpTests.Unit
           SqliteTests.all
-          testSequenced SqliteCSharpTests.Integration ]
+          SqliteCSharpTests.All ]
 
 [<EntryPoint>]
 let main args = runTestsWithCLIArgs [] args allTests

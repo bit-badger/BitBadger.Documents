@@ -1,5 +1,4 @@
-﻿/// Document store implementation for SQLite
-module BitBadger.Documents.Sqlite
+﻿namespace BitBadger.Documents.Sqlite
 
 open BitBadger.Documents
 open Microsoft.Data.Sqlite
@@ -106,11 +105,14 @@ module Results =
         ToCustomList<'TDoc>(cmd, fromData<'TDoc>)
 
 
-/// Execute a non-query command
-let internal write (cmd: SqliteCommand) = backgroundTask {
-    let! _ = cmd.ExecuteNonQueryAsync()
-    ()
-}
+[<AutoOpen>]
+module internal Helpers =
+    
+    /// Execute a non-query command
+    let internal write (cmd: SqliteCommand) = backgroundTask {
+        let! _ = cmd.ExecuteNonQueryAsync()
+        ()
+    }
 
 
 /// Versions of queries that accept a SqliteConnection as the last parameter
@@ -373,17 +375,21 @@ module Definition =
         use conn = Configuration.dbConn ()
         WithConn.Definition.ensureTable name conn
 
-/// Insert a new document
-[<CompiledName "Insert">]
-let insert<'TDoc> tableName (document: 'TDoc) =
-    use conn = Configuration.dbConn ()
-    WithConn.insert tableName document conn
+/// Document insert/save functions
+[<AutoOpen>]
+module Document =
+    
+    /// Insert a new document
+    [<CompiledName "Insert">]
+    let insert<'TDoc> tableName (document: 'TDoc) =
+        use conn = Configuration.dbConn ()
+        WithConn.insert tableName document conn
 
-/// Save a document, inserting it if it does not exist and updating it if it does (AKA "upsert")
-[<CompiledName "Save">]
-let save<'TDoc> tableName (document: 'TDoc) =
-    use conn = Configuration.dbConn ()
-    WithConn.save tableName document conn
+    /// Save a document, inserting it if it does not exist and updating it if it does (AKA "upsert")
+    [<CompiledName "Save">]
+    let save<'TDoc> tableName (document: 'TDoc) =
+        use conn = Configuration.dbConn ()
+        WithConn.save tableName document conn
 
 /// Commands to count documents
 [<RequireQualifiedAccess>]
@@ -613,6 +619,7 @@ module Extensions =
 open System.Runtime.CompilerServices
 
 /// C# extensions on the SqliteConnection type
+[<Extension>]
 type SqliteConnectionCSharpExtensions =
     
     /// Execute a query that returns a list of results
