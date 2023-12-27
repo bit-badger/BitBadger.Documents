@@ -92,10 +92,12 @@ module Query =
             $"CREATE INDEX IF NOT EXISTS idx_{tableName}_document ON {name} USING GIN (data{extraOps})"
 
     /// Create a WHERE clause fragment to implement a @> (JSON contains) condition
+    [<CompiledName "WhereDataContains">]
     let whereDataContains paramName =
         $"data @> %s{paramName}"
     
     /// Create a WHERE clause fragment to implement a @? (JSON Path match) condition
+    [<CompiledName "WhereJsonPathMatches">]
     let whereJsonPathMatches paramName =
         $"data @? %s{paramName}::jsonpath"
     
@@ -103,10 +105,12 @@ module Query =
     module Count =
         
         /// Query to count matching documents using a JSON containment query (@>)
+        [<CompiledName "ByContains">]
         let byContains tableName =
             $"""SELECT COUNT(*) AS it FROM %s{tableName} WHERE {whereDataContains "@criteria"}"""
         
         /// Query to count matching documents using a JSON Path match (@?)
+        [<CompiledName "ByJsonPath">]
         let byJsonPath tableName =
             $"""SELECT COUNT(*) AS it FROM %s{tableName} WHERE {whereJsonPathMatches "@path"}"""
     
@@ -114,10 +118,12 @@ module Query =
     module Exists =
 
         /// Query to determine if documents exist using a JSON containment query (@>)
+        [<CompiledName "ByContains">]
         let byContains tableName =
             $"""SELECT EXISTS (SELECT 1 FROM %s{tableName} WHERE {whereDataContains "@criteria"}) AS it"""
         
         /// Query to determine if documents exist using a JSON Path match (@?)
+        [<CompiledName "ByJsonPath">]
         let byJsonPath tableName =
             $"""SELECT EXISTS (SELECT 1 FROM %s{tableName} WHERE {whereJsonPathMatches "@path"}) AS it"""
     
@@ -125,10 +131,12 @@ module Query =
     module Find =
 
         /// Query to retrieve documents using a JSON containment query (@>)
+        [<CompiledName "ByContains">]
         let byContains tableName =
             $"""{Query.selectFromTable tableName} WHERE {whereDataContains "@criteria"}"""
         
         /// Query to retrieve documents using a JSON Path match (@?)
+        [<CompiledName "ByJsonPath">]
         let byJsonPath tableName =
             $"""{Query.selectFromTable tableName} WHERE {whereJsonPathMatches "@path"}"""
     
@@ -136,18 +144,22 @@ module Query =
     module Update =
 
         /// Query to update a document
+        [<CompiledName "PartialById">]
         let partialById tableName =
             $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereById "@id"}"""
         
         /// Query to update a document
+        [<CompiledName "PartialByField">]
         let partialByField tableName fieldName op =
             $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereByField fieldName op "@field"}"""
         
         /// Query to update partial documents matching a JSON containment query (@>)
+        [<CompiledName "PartialByContains">]
         let partialByContains tableName =
             $"""UPDATE %s{tableName} SET data = data || @data WHERE {whereDataContains "@criteria"}"""
 
         /// Query to update partial documents matching a JSON containment query (@>)
+        [<CompiledName "PartialByJsonPath">]
         let partialByJsonPath tableName =
             $"""UPDATE %s{tableName} SET data = data || @data WHERE {whereJsonPathMatches "@path"}"""
 
@@ -155,10 +167,12 @@ module Query =
     module Delete =
         
         /// Query to delete documents using a JSON containment query (@>)
+        [<CompiledName "ByContains">]
         let byContains tableName =
             $"""DELETE FROM %s{tableName} WHERE {whereDataContains "@criteria"}"""
 
         /// Query to delete documents using a JSON Path match (@?)
+        [<CompiledName "ByJsonPath">]
         let byJsonPath tableName =
             $"""DELETE FROM %s{tableName} WHERE {whereJsonPathMatches "@path"}"""
 
@@ -168,18 +182,22 @@ module Query =
 module Results =
     
     /// Create a domain item from a document, specifying the field in which the document is found
+    [<CompiledName "FromDocument">]
     let fromDocument<'T> field (row: RowReader) : 'T =
         Configuration.serializer().Deserialize<'T>(row.string field)
         
     /// Create a domain item from a document
+    [<CompiledName "FromData">]
     let fromData<'T> row : 'T =
         fromDocument "data" row
     
     /// Extract a count from the column "it"
+    [<CompiledName "ToCount">]
     let toCount (row: RowReader) =
         row.int "it"
     
     /// Extract a true/false value from the column "it"
+    [<CompiledName "ToExists">]
     let toExists (row: RowReader) =
         row.bool "it"
 

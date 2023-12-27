@@ -7,6 +7,7 @@ let allTests =
         [ CommonTests.all
           CommonCSharpTests.Unit
           PostgresTests.all
+          PostgresCSharpTests.All
           SqliteTests.all
           testSequenced SqliteExtensionTests.integrationTests
           SqliteCSharpTests.All

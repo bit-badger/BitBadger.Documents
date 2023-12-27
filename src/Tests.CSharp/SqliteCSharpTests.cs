@@ -16,6 +16,7 @@ public static class SqliteCSharpTests
     /// <summary>
     /// Unit tests for the SQLite library
     /// </summary>
+    [Tests]
     public static Test Unit =
         TestList("Unit", new[]
         {
