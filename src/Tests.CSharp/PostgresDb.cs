@@ -137,7 +137,7 @@ public static class PostgresDb
         Sql.executeNonQuery(Sql.query(Postgres.Query.Definition.EnsureTable(TableName), sqlProps));
         Sql.executeNonQuery(Sql.query(Query.Definition.EnsureKey(TableName), sqlProps));
 
-        Postgres.Configuration.useDataSource(MkDataSource(database.ConnectionString));
+        Postgres.Configuration.UseDataSource(MkDataSource(database.ConnectionString));
 
         return new ThrowawayPostgresDb(database);
     }

@@ -18,11 +18,13 @@ module Configuration =
     let mutable private dataSourceValue : NpgsqlDataSource option = None
 
     /// Register a data source to use for query execution (disposes the current one if it exists)
+    [<CompiledName "UseDataSource">]
     let useDataSource source =
         if Option.isSome dataSourceValue then dataSourceValue.Value.Dispose()
         dataSourceValue <- Some source
     
     /// Retrieve the currently configured data source
+    [<CompiledName "DataSource">]
     let dataSource () =
         match dataSourceValue with
         | Some source -> source
@@ -85,8 +87,8 @@ module Query =
             Query.Definition.ensureTableFor name "JSONB"
         
         /// SQL statement to create an index on JSON documents in the specified table
-        [<CompiledName "EnsureJsonIndex">]
-        let ensureJsonIndex (name: string) idxType =
+        [<CompiledName "EnsureDocumentIndex">]
+        let ensureDocumentIndex (name: string) idxType =
             let extraOps = match idxType with Full -> "" | Optimized -> " jsonb_path_ops"
             let tableName = name.Split '.' |> Array.last
             $"CREATE INDEX IF NOT EXISTS idx_{tableName}_document ON {name} USING GIN (data{extraOps})"
@@ -266,9 +268,9 @@ module WithProps =
         }
 
         /// Create an index on documents in the specified table
-        [<CompiledName "EnsureJsonIndex">]
-        let ensureJsonIndex name idxType sqlProps =
-            Custom.nonQuery (Query.Definition.ensureJsonIndex name idxType) [] sqlProps
+        [<CompiledName "EnsureDocumentIndex">]
+        let ensureDocumentIndex name idxType sqlProps =
+            Custom.nonQuery (Query.Definition.ensureDocumentIndex name idxType) [] sqlProps
         
         /// Create an index on field(s) within documents in the specified table
         [<CompiledName "EnsureFieldIndex">]
@@ -549,9 +551,9 @@ module Definition =
         WithProps.Definition.ensureTable name (fromDataSource ())
 
     /// Create an index on documents in the specified table
-    [<CompiledName "EnsureJsonIndex">]
-    let ensureJsonIndex name idxType =
-        WithProps.Definition.ensureJsonIndex name idxType (fromDataSource ())
+    [<CompiledName "EnsureDocumentIndex">]
+    let ensureDocumentIndex name idxType =
+        WithProps.Definition.ensureDocumentIndex name idxType (fromDataSource ())
     
     /// Create an index on field(s) within documents in the specified table
     [<CompiledName "EnsureFieldIndex">]

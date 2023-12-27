@@ -39,15 +39,15 @@ let unitTests =
                         $"CREATE TABLE IF NOT EXISTS {PostgresDb.TableName} (data JSONB NOT NULL)"
                         "CREATE TABLE statement not constructed correctly"
                 }
-                test "ensureJsonIndex succeeds for full index" {
+                test "ensureDocumentIndex succeeds for full index" {
                     Expect.equal
-                        (Query.Definition.ensureJsonIndex "schema.tbl" Full)
+                        (Query.Definition.ensureDocumentIndex "schema.tbl" Full)
                         "CREATE INDEX IF NOT EXISTS idx_tbl_document ON schema.tbl USING GIN (data)"
                         "CREATE INDEX statement not constructed correctly"
                 }
-                test "ensureJsonIndex succeeds for JSONB Path Ops index" {
+                test "ensureDocumentIndex succeeds for JSONB Path Ops index" {
                     Expect.equal
-                        (Query.Definition.ensureJsonIndex PostgresDb.TableName Optimized)
+                        (Query.Definition.ensureDocumentIndex PostgresDb.TableName Optimized)
                         (sprintf "CREATE INDEX IF NOT EXISTS idx_%s_document ON %s USING GIN (data jsonb_path_ops)"
                             PostgresDb.TableName PostgresDb.TableName)
                         "CREATE INDEX statement not constructed correctly"
@@ -266,7 +266,7 @@ let integrationTests =
                 Expect.isTrue exists'    "The table should now exist"
                 Expect.isTrue alsoExists' "The key index should now exist"
             }
-            testTask "ensureJsonIndex succeeds" {
+            testTask "ensureDocumentIndex succeeds" {
                 use db = PostgresDb.BuildDb()
                 let indexExists () =
                     Custom.scalar
@@ -277,8 +277,8 @@ let integrationTests =
                 let! exists = indexExists ()
                 Expect.isFalse exists "The index should not exist already"
 
-                do! Definition.ensureTable     "ensured"
-                do! Definition.ensureJsonIndex "ensured" Optimized
+                do! Definition.ensureTable         "ensured"
+                do! Definition.ensureDocumentIndex "ensured" Optimized
                 let! exists' = indexExists ()
                 Expect.isTrue exists' "The index should now exist"
             }
@@ -730,7 +730,7 @@ let integrationTests =
                     Expect.equal before 0 "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.partialByContains PostgresDb.TableName {| Value = "burgundy" |} {| Foo = "green" |}
+                    do! Update.partialByJsonPath PostgresDb.TableName "$.NumValue ? (@ < 0)" {| Foo = "green" |}
                 }
             ]
         ]
