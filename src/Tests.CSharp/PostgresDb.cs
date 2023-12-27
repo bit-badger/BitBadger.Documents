@@ -1,4 +1,3 @@
-using BitBadger.Documents.Postgres;
 using Npgsql;
 using Npgsql.FSharp;
 using ThrowawayDb.Postgres;
@@ -12,8 +11,15 @@ public class ThrowawayPostgresDb : IDisposable, IAsyncDisposable
 {
     private readonly ThrowawayDatabase _db;
 
+    /// <summary>
+    /// The connection string for the throwaway database
+    /// </summary>
     public string ConnectionString => _db.ConnectionString;
     
+    /// <summary>
+    /// Constructor
+    /// </summary>
+    /// <param name="db">The throwaway database which this instance will wrap</param>
     public ThrowawayPostgresDb(ThrowawayDatabase db)
     {
         _db = db;

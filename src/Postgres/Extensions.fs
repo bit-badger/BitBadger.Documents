@@ -3,7 +3,7 @@ namespace BitBadger.Documents.Postgres
 open Npgsql
 open Npgsql.FSharp
 
-/// F# Extensions for the NpgsqlConnection type 
+/// F# Extensions for the NpgsqlConnection type
 [<AutoOpen>]
 module Extensions =
     

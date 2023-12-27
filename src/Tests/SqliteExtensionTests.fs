@@ -9,17 +9,10 @@ open Types
 
 /// Integration tests for the F# extensions on the SqliteConnection data type
 let integrationTests =
-    let documents = [
-        { Id = "one"; Value = "FIRST!"; NumValue = 0; Sub = None }
-        { Id = "two"; Value = "another"; NumValue = 10; Sub = Some { Foo = "green"; Bar = "blue" } }
-        { Id = "three"; Value = ""; NumValue = 4; Sub = None }
-        { Id = "four"; Value = "purple"; NumValue = 17; Sub = Some { Foo = "green"; Bar = "red" } }
-        { Id = "five"; Value = "purple"; NumValue = 18; Sub = None }
-    ]
     let loadDocs () = backgroundTask {
-        for doc in documents do do! insert SqliteDb.TableName doc
+        for doc in testDocuments do do! insert SqliteDb.TableName doc
     }
-    testList "Extensions" [
+    testList "Sqlite.Extensions" [
         testTask "ensureTable succeeds" {
             use! db   = SqliteDb.BuildDb()
             use  conn = Configuration.dbConn ()
@@ -465,3 +458,4 @@ let integrationTests =
             Configuration.useConnectionString "data source=:memory:"
         }
     ]
+    |> testSequenced

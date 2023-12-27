@@ -8,8 +8,9 @@ let allTests =
           CommonCSharpTests.Unit
           PostgresTests.all
           PostgresCSharpTests.All
+          PostgresExtensionTests.integrationTests
           SqliteTests.all
-          testSequenced SqliteExtensionTests.integrationTests
+          SqliteExtensionTests.integrationTests
           SqliteCSharpTests.All
           testSequenced SqliteCSharpExtensionTests.Integration ]
 

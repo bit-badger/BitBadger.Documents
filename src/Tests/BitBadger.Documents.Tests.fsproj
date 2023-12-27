@@ -8,6 +8,7 @@
     <Compile Include="CommonTests.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="PostgresTests.fs" />
+    <Compile Include="PostgresExtensionTests.fs" />
     <Compile Include="SqliteTests.fs" />
     <Compile Include="SqliteExtensionTests.fs" />
     <Compile Include="Program.fs" />

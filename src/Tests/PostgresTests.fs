@@ -240,9 +240,8 @@ let integrationTests =
                 }
             ]
             testTask "scalar succeeds" {
-                use db = PostgresDb.BuildDb()
-
-                let! nbr = Custom.scalar $"SELECT 5 AS test_value" [] (fun row -> row.int "test_value")
+                use  db  = PostgresDb.BuildDb()
+                let! nbr = Custom.scalar "SELECT 5 AS test_value" [] (fun row -> row.int "test_value")
                 Expect.equal nbr 5 "The query should have returned the number 5"
             }
         ]
