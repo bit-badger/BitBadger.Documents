@@ -563,7 +563,7 @@ let integrationTests =
                 do! loadDocs conn
                 
                 do! conn.updatePartialByField PostgresDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
-                let! after = Count.byField PostgresDb.TableName "NumValue" EQ "77"
+                let! after = conn.countByField PostgresDb.TableName "NumValue" EQ "77"
                 Expect.equal after 2 "There should have been 2 documents returned"
             }
             testTask "succeeds when no document is updated" {
@@ -583,7 +583,7 @@ let integrationTests =
                 do! loadDocs conn
                 
                 do! conn.updatePartialByContains PostgresDb.TableName {| Value = "purple" |} {| NumValue = 77 |}
-                let! after = Count.byContains PostgresDb.TableName {| NumValue = 77 |}
+                let! after = conn.countByContains PostgresDb.TableName {| NumValue = 77 |}
                 Expect.equal after 2 "There should have been 2 documents returned"
             }
             testTask "succeeds when no document is updated" {

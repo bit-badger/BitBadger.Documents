@@ -9,9 +9,10 @@ let allTests =
           PostgresTests.all
           PostgresCSharpTests.All
           PostgresExtensionTests.integrationTests
+          testSequenced PostgresCSharpExtensionTests.Integration
           SqliteTests.all
-          SqliteExtensionTests.integrationTests
           SqliteCSharpTests.All
+          SqliteExtensionTests.integrationTests
           testSequenced SqliteCSharpExtensionTests.Integration ]
 
 [<EntryPoint>]

@@ -18,7 +18,7 @@ public static class SqliteCSharpExtensionTests
     /// Integration tests for the SQLite extension methods
     /// </summary>
     [Tests]
-    public static readonly Test Integration = TestList("Extensions", new[]
+    public static readonly Test Integration = TestList("Sqlite.C#.Extensions", new[]
     {
         TestList("CustomSingle", new[]
         {
