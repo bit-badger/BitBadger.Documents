@@ -1,4 +1,4 @@
-﻿namespace BitBadger.Documents.Sqlite
+namespace BitBadger.Documents.Sqlite
 
 open Microsoft.Data.Sqlite
 
