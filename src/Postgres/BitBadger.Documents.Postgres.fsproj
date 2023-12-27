@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <Compile Include="Library.fs" />
+    <Compile Include="Extensions.fs" />
   </ItemGroup>
 
   <ItemGroup>

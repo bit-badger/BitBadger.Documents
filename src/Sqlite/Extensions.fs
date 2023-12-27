@@ -100,7 +100,6 @@ module Extensions =
 open System.Runtime.CompilerServices
 
 /// C# extensions on the SqliteConnection type
-[<Extension>]
 type SqliteConnectionCSharpExtensions =
     
     /// Execute a query that returns a list of results
