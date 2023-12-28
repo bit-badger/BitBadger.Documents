@@ -7,17 +7,15 @@
     <FileVersion>3.0.0.0</FileVersion>
     <VersionPrefix>3.0.0</VersionPrefix>
     <VersionSuffix>rc-1</VersionSuffix>
-    <PackageReleaseNotes>Initial release with F# support</PackageReleaseNotes>
     <Authors>danieljsummers</Authors>
     <Company>Bit Badger Solutions</Company>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageProjectUrl>https://bitbadger.solutions/open-source/sqlite-documents/</PackageProjectUrl>
+    <PackageProjectUrl>https://bitbadger.solutions/open-source/relational-documents/</PackageProjectUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <RepositoryUrl>https://github.com/bit-badger/BitBadger.Sqlite.Documents</RepositoryUrl>
+    <RepositoryUrl>https://github.com/bit-badger/BitBadger.Documents</RepositoryUrl>
     <RepositoryType>Git</RepositoryType>
     <Copyright>MIT License</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageTags>SQLite JSON document</PackageTags>
   </PropertyGroup>
 </Project>
