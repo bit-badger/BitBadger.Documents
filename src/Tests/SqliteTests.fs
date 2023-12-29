@@ -17,16 +17,16 @@ let unitTests =
                     "CREATE TABLE IF NOT EXISTS tbl (data TEXT NOT NULL)"
                     "CREATE TABLE statement not correct"
             }
-            testList "Update" [
-                test "partialById succeeds" {
+            testList "Patch" [
+                test "byId succeeds" {
                     Expect.equal
-                        (Query.Update.partialById "tbl")
+                        (Query.Patch.byId "tbl")
                         "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Id' = @id"
                         "UPDATE partial by ID statement not correct"
                 }
-                test "partialByField succeeds" {
+                test "byField succeeds" {
                     Expect.equal
-                        (Query.Update.partialByField "tbl" "Part" NE)
+                        (Query.Patch.byField "tbl" "Part" NE)
                         "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field"
                         "UPDATE partial by JSON comparison query not correct"
                 }
@@ -385,13 +385,13 @@ let integrationTests =
             ]
         ]
         testList "Update" [
-            testList "full" [
+            testList "byId" [
                 testTask "succeeds when a document is updated" {
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
                     let testDoc = { emptyDoc with Id = "one"; Sub = Some { Foo = "blue"; Bar = "red" } }
-                    do! Update.full SqliteDb.TableName "one" testDoc
+                    do! Update.byId SqliteDb.TableName "one" testDoc
                     let! after = Find.byId<string, JsonDocument> SqliteDb.TableName "one"
                     Expect.isSome after "There should have been a document returned post-update"
                     Expect.equal after.Value testDoc "The updated document is not correct"
@@ -403,18 +403,19 @@ let integrationTests =
                     Expect.isEmpty before "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.full
+                    do! Update.byId
                             SqliteDb.TableName
                             "test"
                             { emptyDoc with Id = "x"; Sub = Some { Foo = "blue"; Bar = "red" } }
                 }
             ]
-            testList "fullFunc" [
+            testList "byFunc" [
                 testTask "succeeds when a document is updated" {
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    do! Update.fullFunc SqliteDb.TableName (_.Id) { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
+                    do! Update.byFunc
+                            SqliteDb.TableName (_.Id) { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
                     let! after = Find.byId<string, JsonDocument> SqliteDb.TableName "one"
                     Expect.isSome after "There should have been a document returned post-update"
                     Expect.equal
@@ -429,15 +430,18 @@ let integrationTests =
                     Expect.isEmpty before "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.fullFunc SqliteDb.TableName (_.Id) { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
+                    do! Update.byFunc
+                            SqliteDb.TableName (_.Id) { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
                 }
             ]
-            testList "partialById" [
+        ]
+        testList "Patch" [
+            testList "byId" [
                 testTask "succeeds when a document is updated" {
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! Update.partialById SqliteDb.TableName "one" {| NumValue = 44 |}
+                    do! Patch.byId SqliteDb.TableName "one" {| NumValue = 44 |}
                     let! after = Find.byId<string, JsonDocument> SqliteDb.TableName "one"
                     Expect.isSome after "There should have been a document returned post-update"
                     Expect.equal after.Value.NumValue 44 "The updated document is not correct"
@@ -449,15 +453,15 @@ let integrationTests =
                     Expect.isEmpty before "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.partialById SqliteDb.TableName "test" {| Foo = "green" |}
+                    do! Patch.byId SqliteDb.TableName "test" {| Foo = "green" |}
                 }
             ]
-            testList "partialByField" [
+            testList "byField" [
                 testTask "succeeds when a document is updated" {
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! Update.partialByField SqliteDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
+                    do! Patch.byField SqliteDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
                     let! after = Count.byField SqliteDb.TableName "NumValue" EQ 77
                     Expect.equal after 2L "There should have been 2 documents returned"
                 }
@@ -468,7 +472,7 @@ let integrationTests =
                     Expect.isEmpty before "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.partialByField SqliteDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+                    do! Patch.byField SqliteDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
                 }
             ]
         ]

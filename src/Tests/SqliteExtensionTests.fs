@@ -231,14 +231,14 @@ let integrationTests =
                 Expect.isFalse (Option.isSome doc) "There should not have been a document returned"
             }
         ]
-        testList "updateFull" [
+        testList "updateById" [
             testTask "succeeds when a document is updated" {
                 use! db   = SqliteDb.BuildDb()
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
                 let testDoc = { emptyDoc with Id = "one"; Sub = Some { Foo = "blue"; Bar = "red" } }
-                do! conn.updateFull SqliteDb.TableName "one" testDoc
+                do! conn.updateById SqliteDb.TableName "one" testDoc
                 let! after = conn.findById<string, JsonDocument> SqliteDb.TableName "one"
                 if Option.isNone after then
                     Expect.isTrue false "There should have been a document returned post-update"
@@ -252,22 +252,20 @@ let integrationTests =
                 Expect.isEmpty before "There should have been no documents returned"
                 
                 // This not raising an exception is the test
-                do! conn.updateFull
+                do! conn.updateById
                         SqliteDb.TableName
                         "test"
                         { emptyDoc with Id = "x"; Sub = Some { Foo = "blue"; Bar = "red" } }
             }
         ]
-        testList "updateFullFunc" [
+        testList "updateByFunc" [
             testTask "succeeds when a document is updated" {
                 use! db   = SqliteDb.BuildDb()
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                do! conn.updateFullFunc
-                        SqliteDb.TableName
-                        (_.Id)
-                        { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
+                do! conn.updateByFunc
+                        SqliteDb.TableName (_.Id) { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
                 let! after = conn.findById<string, JsonDocument> SqliteDb.TableName "one"
                 if Option.isNone after then
                     Expect.isTrue false "There should have been a document returned post-update"
@@ -284,19 +282,17 @@ let integrationTests =
                 Expect.isEmpty before "There should have been no documents returned"
                 
                 // This not raising an exception is the test
-                do! conn.updateFullFunc
-                        SqliteDb.TableName
-                        (_.Id)
-                        { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
+                do! conn.updateByFunc
+                        SqliteDb.TableName (_.Id) { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
             }
         ]
-        testList "updatePartialById" [
+        testList "patchById" [
             testTask "succeeds when a document is updated" {
                 use! db   = SqliteDb.BuildDb()
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
                 
-                do! conn.updatePartialById SqliteDb.TableName "one" {| NumValue = 44 |}
+                do! conn.patchById SqliteDb.TableName "one" {| NumValue = 44 |}
                 let! after = conn.findById<string, JsonDocument> SqliteDb.TableName "one"
                 if Option.isNone after then
                     Expect.isTrue false "There should have been a document returned post-update"
@@ -310,16 +306,16 @@ let integrationTests =
                 Expect.isEmpty before "There should have been no documents returned"
                 
                 // This not raising an exception is the test
-                do! conn.updatePartialById SqliteDb.TableName "test" {| Foo = "green" |}
+                do! conn.patchById SqliteDb.TableName "test" {| Foo = "green" |}
             }
         ]
-        testList "updatePartialByField" [
+        testList "patchByField" [
             testTask "succeeds when a document is updated" {
                 use! db   = SqliteDb.BuildDb()
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
                 
-                do! conn.updatePartialByField SqliteDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
+                do! conn.patchByField SqliteDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
                 let! after = conn.countByField SqliteDb.TableName "NumValue" EQ 77
                 Expect.equal after 2L "There should have been 2 documents returned"
             }
@@ -331,7 +327,7 @@ let integrationTests =
                 Expect.isEmpty before "There should have been no documents returned"
                 
                 // This not raising an exception is the test
-                do! conn.updatePartialByField SqliteDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+                do! conn.patchByField SqliteDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
             }
         ]
         testList "deleteById" [

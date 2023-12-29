@@ -25,17 +25,17 @@ public static class SqliteCSharpTests
                 Expect.equal(Sqlite.Query.Definition.EnsureTable("tbl"),
                     "CREATE TABLE IF NOT EXISTS tbl (data TEXT NOT NULL)", "CREATE TABLE statement not correct");
             }),
-            TestList("Update", new[]
+            TestList("Patch", new[]
             {
-                TestCase("PartialById succeeds", () =>
+                TestCase("ById succeeds", () =>
                 {
-                    Expect.equal(Sqlite.Query.Update.PartialById("tbl"),
+                    Expect.equal(Sqlite.Query.Patch.ById("tbl"),
                         "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Id' = @id",
                         "UPDATE partial by ID statement not correct");
                 }),
-                TestCase("PartialByField succeeds", () =>
+                TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Sqlite.Query.Update.PartialByField("tbl", "Part", Op.NE),
+                    Expect.equal(Sqlite.Query.Patch.ByField("tbl", "Part", Op.NE),
                         "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field",
                         "UPDATE partial by JSON comparison query not correct");
                 })
@@ -420,7 +420,7 @@ public static class SqliteCSharpTests
         }),
         TestList("Update", new[]
         {
-            TestList("Full", new[]
+            TestList("ById", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
@@ -428,7 +428,7 @@ public static class SqliteCSharpTests
                     await LoadDocs();
 
                     var testDoc = new JsonDocument { Id = "one", Sub = new() { Foo = "blue", Bar = "red" } };
-                    await Update.Full(SqliteDb.TableName, "one", testDoc);
+                    await Update.ById(SqliteDb.TableName, "one", testDoc);
                     var after = await Find.ById<string, JsonDocument>(SqliteDb.TableName, "one");
                     Expect.isNotNull(after, "There should have been a document returned post-update");
                     Expect.equal(after!.Id, "one", "The updated document is not correct");
@@ -444,18 +444,18 @@ public static class SqliteCSharpTests
                     Expect.isEmpty(before, "There should have been no documents returned");
 
                     // This not raising an exception is the test
-                    await Update.Full(SqliteDb.TableName, "test",
+                    await Update.ById(SqliteDb.TableName, "test",
                         new JsonDocument { Id = "x", Sub = new() { Foo = "blue", Bar = "red" } });
                 })
             }),
-            TestList("FullFunc", new[]
+            TestList("ByFunc", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    await Update.FullFunc(SqliteDb.TableName, doc => doc.Id,
+                    await Update.ByFunc(SqliteDb.TableName, doc => doc.Id,
                         new JsonDocument { Id = "one", Value = "le un", NumValue = 1 });
                     var after = await Find.ById<string, JsonDocument>(SqliteDb.TableName, "one");
                     Expect.isNotNull(after, "There should have been a document returned post-update");
@@ -472,18 +472,21 @@ public static class SqliteCSharpTests
                     Expect.isEmpty(before, "There should have been no documents returned");
 
                     // This not raising an exception is the test
-                    await Update.FullFunc(SqliteDb.TableName, doc => doc.Id,
+                    await Update.ByFunc(SqliteDb.TableName, doc => doc.Id,
                         new JsonDocument { Id = "one", Value = "le un", NumValue = 1 });
                 })
             }),
-            TestList("PartialById", new[]
+        }),
+        TestList("Patch", new[]
+        {
+            TestList("ById", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    await Update.PartialById(SqliteDb.TableName, "one", new { NumValue = 44 });
+                    await Patch.ById(SqliteDb.TableName, "one", new { NumValue = 44 });
                     var after = await Find.ById<string, JsonDocument>(SqliteDb.TableName, "one");
                     Expect.isNotNull(after, "There should have been a document returned post-update");
                     Expect.equal(after!.Id, "one", "The updated document is not correct");
@@ -497,18 +500,17 @@ public static class SqliteCSharpTests
                     Expect.isEmpty(before, "There should have been no documents returned");
 
                     // This not raising an exception is the test
-                    await Update.PartialById(SqliteDb.TableName, "test", new { Foo = "green" });
+                    await Patch.ById(SqliteDb.TableName, "test", new { Foo = "green" });
                 })
             }),
-            TestList("PartialByField", new[]
+            TestList("ByField", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    await Update.PartialByField(SqliteDb.TableName, "Value", Op.EQ, "purple",
-                        new { NumValue = 77 });
+                    await Patch.ByField(SqliteDb.TableName, "Value", Op.EQ, "purple", new { NumValue = 77 });
                     var after = await Count.ByField(SqliteDb.TableName, "NumValue", Op.EQ, 77);
                     Expect.equal(after, 2L, "There should have been 2 documents returned");
                 }),
@@ -520,8 +522,7 @@ public static class SqliteCSharpTests
                     Expect.isEmpty(before, "There should have been no documents returned");
 
                     // This not raising an exception is the test
-                    await Update.PartialByField(SqliteDb.TableName, "Value", Op.EQ, "burgundy",
-                        new { Foo = "green" });
+                    await Patch.ByField(SqliteDb.TableName, "Value", Op.EQ, "burgundy", new { Foo = "green" });
                 })
             })
         }),

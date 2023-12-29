@@ -72,21 +72,21 @@ module Extensions =
         member conn.findFirstByField<'TDoc> tableName fieldName op (value: obj) =
             WithConn.Find.firstByField<'TDoc> tableName fieldName op value conn
 
-        /// Update an entire document
-        member conn.updateFull tableName (docId: 'TKey) (document: 'TDoc) =
-            WithConn.Update.full tableName docId document conn
+        /// Update an entire document by its ID
+        member conn.updateById tableName (docId: 'TKey) (document: 'TDoc) =
+            WithConn.Update.byId tableName docId document conn
         
-        /// Update an entire document
-        member conn.updateFullFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
-            WithConn.Update.fullFunc tableName idFunc document conn
+        /// Update an entire document by its ID, using the provided function to obtain the ID from the document
+        member conn.updateByFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
+            WithConn.Update.byFunc tableName idFunc document conn
         
-        /// Update a partial document
-        member conn.updatePartialById tableName (docId: 'TKey) (partial: 'TPatch) =
-            WithConn.Update.partialById tableName docId partial conn
+        /// Patch a document by its ID
+        member conn.patchById tableName (docId: 'TKey) (patch: 'TPatch) =
+            WithConn.Patch.byId tableName docId patch conn
         
-        /// Update partial documents using a comparison on a JSON field
-        member conn.updatePartialByField tableName fieldName op (value: obj) (partial: 'TPatch) =
-            WithConn.Update.partialByField tableName fieldName op value partial conn
+        /// Patch documents using a comparison on a JSON field
+        member conn.patchByField tableName fieldName op (value: obj) (patch: 'TPatch) =
+            WithConn.Patch.byField tableName fieldName op value patch conn
 
         /// Delete a document by its ID
         member conn.deleteById tableName (docId: 'TKey) =
@@ -184,25 +184,25 @@ type SqliteConnectionCSharpExtensions =
     static member inline FindFirstByField<'TDoc when 'TDoc: null>(conn, tableName, fieldName, op, value: obj) =
         WithConn.Find.FirstByField<'TDoc>(tableName, fieldName, op, value, conn)
 
-    /// Update an entire document
+    /// Update an entire document by its ID
     [<Extension>]
-    static member inline UpdateFull<'TKey, 'TDoc>(conn, tableName, docId: 'TKey, document: 'TDoc) =
-        WithConn.Update.full tableName docId document conn
+    static member inline UpdateById<'TKey, 'TDoc>(conn, tableName, docId: 'TKey, document: 'TDoc) =
+        WithConn.Update.byId tableName docId document conn
     
-    /// Update an entire document
+    /// Update an entire document by its ID, using the provided function to obtain the ID from the document
     [<Extension>]
-    static member inline UpdateFullFunc<'TKey, 'TDoc>(conn, tableName, idFunc: System.Func<'TDoc, 'TKey>, doc: 'TDoc) =
-        WithConn.Update.FullFunc(tableName, idFunc, doc, conn)
+    static member inline UpdateByFunc<'TKey, 'TDoc>(conn, tableName, idFunc: System.Func<'TDoc, 'TKey>, doc: 'TDoc) =
+        WithConn.Update.ByFunc(tableName, idFunc, doc, conn)
     
-    /// Update a partial document
+    /// Patch a document by its ID
     [<Extension>]
-    static member inline UpdatePartialById<'TKey, 'TPatch>(conn, tableName, docId: 'TKey, partial: 'TPatch) =
-        WithConn.Update.partialById tableName docId partial conn
+    static member inline PatchById<'TKey, 'TPatch>(conn, tableName, docId: 'TKey, patch: 'TPatch) =
+        WithConn.Patch.byId tableName docId patch conn
     
-    /// Update partial documents using a comparison on a JSON field
+    /// Patch documents using a comparison on a JSON field
     [<Extension>]
-    static member inline UpdatePartialByField<'TPatch>(conn, tableName, fieldName, op, value: obj, partial: 'TPatch) =
-        WithConn.Update.partialByField tableName fieldName op value partial conn
+    static member inline PatchByField<'TPatch>(conn, tableName, fieldName, op, value: obj, patch: 'TPatch) =
+        WithConn.Patch.byField tableName fieldName op value patch conn
 
     /// Delete a document by its ID
     [<Extension>]

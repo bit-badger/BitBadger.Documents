@@ -39,17 +39,17 @@ module Query =
         let ensureTable name =
             Query.Definition.ensureTableFor name "TEXT"
     
-    /// Document update queries
-    module Update =
+    /// Document patching (partial update) queries
+    module Patch =
         
-        /// Query to update a partial document by its ID
-        [<CompiledName "PartialById">]
-        let partialById tableName =
+        /// Query to patch (partially update) a document by its ID
+        [<CompiledName "ById">]
+        let byId tableName =
             $"""UPDATE %s{tableName} SET data = json_patch(data, json(@data)) WHERE {Query.whereById "@id"}"""
             
-        /// Query to update a partial document via a comparison on a JSON field
-        [<CompiledName "PartialByField">]
-        let partialByField tableName fieldName op =
+        /// Query to patch (partially update) a document via a comparison on a JSON field
+        [<CompiledName "ByField">]
+        let byField tableName fieldName op =
             sprintf
                 "UPDATE %s SET data = json_patch(data, json(@data)) WHERE %s"
                 tableName (Query.whereByField fieldName op "@field")
@@ -295,32 +295,34 @@ module WithConn =
     [<RequireQualifiedAccess>]
     module Update =
         
-        /// Update an entire document
-        [<CompiledName "Full">]
-        let full tableName (docId: 'TKey) (document: 'TDoc) conn =
+        /// Update an entire document by its ID
+        [<CompiledName "ById">]
+        let byId tableName (docId: 'TKey) (document: 'TDoc) conn =
             Custom.nonQuery (Query.update tableName) [ idParam docId; jsonParam "@data" document ] conn
         
-        /// Update an entire document
-        [<CompiledName "FSharpFullFunc">]
-        let fullFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) conn =
-            full tableName (idFunc document) document conn
+        /// Update an entire document by its ID, using the provided function to obtain the ID from the document
+        [<CompiledName "FSharpByFunc">]
+        let byFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) conn =
+            byId tableName (idFunc document) document conn
         
-        /// Update an entire document
-        let FullFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc, conn) =
-            fullFunc tableName idFunc.Invoke document conn
+        /// Update an entire document by its ID, using the provided function to obtain the ID from the document
+        let ByFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc, conn) =
+            byFunc tableName idFunc.Invoke document conn
+    
+    /// Commands to patch (partially update) documents
+    [<RequireQualifiedAccess>]
+    module Patch =
         
-        /// Update a partial document
-        [<CompiledName "PartialById">]
-        let partialById tableName (docId: 'TKey) (partial: 'TPatch) conn =
-            Custom.nonQuery (Query.Update.partialById tableName) [ idParam docId; jsonParam "@data" partial ] conn
+        /// Patch a document by its ID
+        [<CompiledName "ById">]
+        let byId tableName (docId: 'TKey) (patch: 'TPatch) conn =
+            Custom.nonQuery (Query.Patch.byId tableName) [ idParam docId; jsonParam "@data" patch ] conn
         
-        /// Update partial documents using a comparison on a JSON field
-        [<CompiledName "PartialByField">]
-        let partialByField tableName fieldName op (value: obj) (partial: 'TPatch) (conn: SqliteConnection) =
+        /// Patch documents using a comparison on a JSON field
+        [<CompiledName "ByField">]
+        let byField tableName fieldName op (value: obj) (patch: 'TPatch) (conn: SqliteConnection) =
             Custom.nonQuery
-                (Query.Update.partialByField tableName fieldName op)
-                [ fieldParam value; jsonParam "@data" partial ]
-                conn
+                (Query.Patch.byField tableName fieldName op) [ fieldParam value; jsonParam "@data" patch ] conn
 
     /// Commands to delete documents
     [<RequireQualifiedAccess>]
@@ -490,34 +492,38 @@ module Find =
 [<RequireQualifiedAccess>]
 module Update =
     
-    /// Update an entire document
-    [<CompiledName "Full">]
-    let full tableName (docId: 'TKey) (document: 'TDoc) =
+    /// Update an entire document by its ID
+    [<CompiledName "ById">]
+    let byId tableName (docId: 'TKey) (document: 'TDoc) =
         use conn = Configuration.dbConn ()
-        WithConn.Update.full tableName docId document conn
+        WithConn.Update.byId tableName docId document conn
     
-    /// Update an entire document
-    [<CompiledName "FSharpFullFunc">]
-    let fullFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
+    /// Update an entire document by its ID, using the provided function to obtain the ID from the document
+    [<CompiledName "FSharpByFunc">]
+    let byFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
         use conn = Configuration.dbConn ()
-        WithConn.Update.fullFunc tableName idFunc document conn
+        WithConn.Update.byFunc tableName idFunc document conn
     
-    /// Update an entire document
-    let FullFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc) =
+    /// Update an entire document by its ID, using the provided function to obtain the ID from the document
+    let ByFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc) =
         use conn = Configuration.dbConn ()
-        WithConn.Update.FullFunc(tableName, idFunc, document, conn)
+        WithConn.Update.ByFunc(tableName, idFunc, document, conn)
+
+/// Commands to patch (partially update) documents
+[<RequireQualifiedAccess>]
+module Patch =
     
-    /// Update a partial document
-    [<CompiledName "PartialById">]
-    let partialById tableName (docId: 'TKey) (partial: 'TPatch) =
+    /// Patch a document by its ID
+    [<CompiledName "ById">]
+    let byId tableName (docId: 'TKey) (patch: 'TPatch) =
         use conn = Configuration.dbConn ()
-        WithConn.Update.partialById tableName docId partial conn
+        WithConn.Patch.byId tableName docId patch conn
     
-    /// Update partial documents using a comparison on a JSON field in the WHERE clause
-    [<CompiledName "PartialByField">]
-    let partialByField tableName fieldName op (value: obj) (partial: 'TPatch) =
+    /// Patch documents using a comparison on a JSON field in the WHERE clause
+    [<CompiledName "ByField">]
+    let byField tableName fieldName op (value: obj) (patch: 'TPatch) =
         use conn = Configuration.dbConn ()
-        WithConn.Update.partialByField tableName fieldName op value partial conn
+        WithConn.Patch.byField tableName fieldName op value patch conn
 
 /// Commands to delete documents
 [<RequireQualifiedAccess>]
