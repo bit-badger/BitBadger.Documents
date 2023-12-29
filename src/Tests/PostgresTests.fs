@@ -101,28 +101,28 @@ let unitTests =
                         "SELECT by JSON Path match query not correct"
                 }
             ]
-            testList "Update" [
-                test "partialById succeeds" {
+            testList "Patch" [
+                test "byId succeeds" {
                     Expect.equal
-                        (Query.Update.partialById PostgresDb.TableName)
+                        (Query.Patch.byId PostgresDb.TableName)
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data ->> 'Id' = @id"
                         "UPDATE partial by ID statement not correct"
                 }
-                test "partialByField succeeds" {
+                test "byField succeeds" {
                     Expect.equal
-                        (Query.Update.partialByField PostgresDb.TableName "Snail" LT)
+                        (Query.Patch.byField PostgresDb.TableName "Snail" LT)
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data ->> 'Snail' < @field"
                         "UPDATE partial by ID statement not correct"
                 }
-                test "partialByContains succeeds" {
+                test "byContains succeeds" {
                     Expect.equal
-                        (Query.Update.partialByContains PostgresDb.TableName)
+                        (Query.Patch.byContains PostgresDb.TableName)
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data @> @criteria"
                         "UPDATE partial by JSON containment statement not correct"
                 }
-                test "partialByJsonPath succeeds" {
+                test "byJsonPath succeeds" {
                     Expect.equal
-                        (Query.Update.partialByJsonPath PostgresDb.TableName)
+                        (Query.Patch.byJsonPath PostgresDb.TableName)
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data @? @path::jsonpath"
                         "UPDATE partial by JSON Path statement not correct"
                 }
@@ -606,13 +606,13 @@ let integrationTests =
             ]
         ]
         testList "Update" [
-            testList "full" [
+            testList "byId" [
                 testTask "succeeds when a document is updated" {
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
                     let testDoc = { emptyDoc with Id = "one"; Sub = Some { Foo = "blue"; Bar = "red" } }
-                    do! Update.full PostgresDb.TableName "one" testDoc
+                    do! Update.byId PostgresDb.TableName "one" testDoc
                     let! after = Find.byId<string, JsonDocument> PostgresDb.TableName "one"
                     Expect.isSome after "There should have been a document returned post-update"
                     Expect.equal after.Value testDoc "The updated document is not correct"
@@ -624,18 +624,18 @@ let integrationTests =
                     Expect.equal before 0 "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.full
+                    do! Update.byId
                             PostgresDb.TableName
                             "test"
                             { emptyDoc with Id = "x"; Sub = Some { Foo = "blue"; Bar = "red" } }
                 }
             ]
-            testList "fullFunc" [
+            testList "byFunc" [
                 testTask "succeeds when a document is updated" {
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    do! Update.fullFunc PostgresDb.TableName (_.Id)
+                    do! Update.byFunc PostgresDb.TableName (_.Id)
                             { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
                     let! after = Find.byId<string, JsonDocument> PostgresDb.TableName "one"
                     Expect.isSome after "There should have been a document returned post-update"
@@ -651,16 +651,18 @@ let integrationTests =
                     Expect.equal before 0 "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.fullFunc
+                    do! Update.byFunc
                             PostgresDb.TableName (_.Id) { Id = "one"; Value = "le un"; NumValue = 1; Sub = None }
                 }
             ]
-            testList "partialById" [
+        ]
+        testList "Patch" [
+            testList "byId" [
                 testTask "succeeds when a document is updated" {
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! Update.partialById PostgresDb.TableName "one" {| NumValue = 44 |}
+                    do! Patch.byId PostgresDb.TableName "one" {| NumValue = 44 |}
                     let! after = Find.byId<string, JsonDocument> PostgresDb.TableName "one"
                     Expect.isSome after "There should have been a document returned post-update"
                     Expect.equal after.Value.NumValue 44 "The updated document is not correct"
@@ -672,15 +674,15 @@ let integrationTests =
                     Expect.equal before 0 "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.partialById PostgresDb.TableName "test" {| Foo = "green" |}
+                    do! Patch.byId PostgresDb.TableName "test" {| Foo = "green" |}
                 }
             ]
-            testList "partialByField" [
+            testList "byField" [
                 testTask "succeeds when a document is updated" {
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! Update.partialByField PostgresDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
+                    do! Patch.byField PostgresDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
                     let! after = Count.byField PostgresDb.TableName "NumValue" EQ "77"
                     Expect.equal after 2 "There should have been 2 documents returned"
                 }
@@ -691,15 +693,15 @@ let integrationTests =
                     Expect.equal before 0 "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.partialByField PostgresDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+                    do! Patch.byField PostgresDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
                 }
             ]
-            testList "partialByContains" [
+            testList "byContains" [
                 testTask "succeeds when a document is updated" {
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! Update.partialByContains PostgresDb.TableName {| Value = "purple" |} {| NumValue = 77 |}
+                    do! Patch.byContains PostgresDb.TableName {| Value = "purple" |} {| NumValue = 77 |}
                     let! after = Count.byContains PostgresDb.TableName {| NumValue = 77 |}
                     Expect.equal after 2 "There should have been 2 documents returned"
                 }
@@ -710,15 +712,15 @@ let integrationTests =
                     Expect.equal before 0 "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.partialByContains PostgresDb.TableName {| Value = "burgundy" |} {| Foo = "green" |}
+                    do! Patch.byContains PostgresDb.TableName {| Value = "burgundy" |} {| Foo = "green" |}
                 }
             ]
-            testList "partialByJsonPath" [
+            testList "byJsonPath" [
                 testTask "succeeds when a document is updated" {
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! Update.partialByJsonPath PostgresDb.TableName "$.NumValue ? (@ > 10)" {| NumValue = 1000 |}
+                    do! Patch.byJsonPath PostgresDb.TableName "$.NumValue ? (@ > 10)" {| NumValue = 1000 |}
                     let! after = Count.byJsonPath PostgresDb.TableName "$.NumValue ? (@ > 999)"
                     Expect.equal after 2 "There should have been 2 documents returned"
                 }
@@ -729,7 +731,7 @@ let integrationTests =
                     Expect.equal before 0 "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Update.partialByJsonPath PostgresDb.TableName "$.NumValue ? (@ < 0)" {| Foo = "green" |}
+                    do! Patch.byJsonPath PostgresDb.TableName "$.NumValue ? (@ < 0)" {| Foo = "green" |}
                 }
             ]
         ]

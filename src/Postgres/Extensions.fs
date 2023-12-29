@@ -109,29 +109,29 @@ module Extensions =
         member conn.findFirstByJsonPath<'TDoc> tableName jsonPath =
             WithProps.Find.firstByJsonPath<'TDoc> tableName jsonPath (Sql.existingConnection conn)
         
-        /// Update a full document
-        member conn.updateFull tableName (docId: 'TKey) (document: 'TDoc) =
-            WithProps.Update.full tableName docId document (Sql.existingConnection conn)
+        /// Update an entire document by its ID
+        member conn.updateById tableName (docId: 'TKey) (document: 'TDoc) =
+            WithProps.Update.byId tableName docId document (Sql.existingConnection conn)
 
-        /// Update a full document
-        member conn.updateFullFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
-            WithProps.Update.fullFunc tableName idFunc document (Sql.existingConnection conn)
+        /// Update an entire document by its ID, using the provided function to obtain the ID from the document
+        member conn.updateByFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
+            WithProps.Update.byFunc tableName idFunc document (Sql.existingConnection conn)
 
-        /// Update a partial document
-        member conn.updatePartialById tableName (docId: 'TKey) (partial: 'TPartial) =
-            WithProps.Update.partialById tableName docId partial (Sql.existingConnection conn)
+        /// Patch a document by its ID
+        member conn.patchById tableName (docId: 'TKey) (patch: 'TPatch) =
+            WithProps.Patch.byId tableName docId patch (Sql.existingConnection conn)
         
-        /// Update partial documents using a JSON field comparison query in the WHERE clause (->> =)
-        member conn.updatePartialByField tableName fieldName op (value: obj) (partial: 'TPartial) =
-            WithProps.Update.partialByField tableName fieldName op value partial (Sql.existingConnection conn)
+        /// Patch documents using a JSON field comparison query in the WHERE clause (->> =)
+        member conn.patchByField tableName fieldName op (value: obj) (patch: 'TPatch) =
+            WithProps.Patch.byField tableName fieldName op value patch (Sql.existingConnection conn)
         
-        /// Update partial documents using a JSON containment query in the WHERE clause (@>)
-        member conn.updatePartialByContains tableName (criteria: 'TCriteria) (partial: 'TPartial) =
-            WithProps.Update.partialByContains tableName criteria partial (Sql.existingConnection conn)
+        /// Patch documents using a JSON containment query in the WHERE clause (@>)
+        member conn.patchByContains tableName (criteria: 'TCriteria) (patch: 'TPatch) =
+            WithProps.Patch.byContains tableName criteria patch (Sql.existingConnection conn)
         
-        /// Update partial documents using a JSON Path match query in the WHERE clause (@?)
-        member conn.updatePartialByJsonPath tableName jsonPath (partial: 'TPartial) =
-            WithProps.Update.partialByJsonPath tableName jsonPath partial (Sql.existingConnection conn)
+        /// Patch documents using a JSON Path match query in the WHERE clause (@?)
+        member conn.patchByJsonPath tableName jsonPath (patch: 'TPatch) =
+            WithProps.Patch.byJsonPath tableName jsonPath patch (Sql.existingConnection conn)
         
         /// Delete a document by its ID
         member conn.deleteById tableName (docId: 'TKey) =
@@ -282,35 +282,35 @@ type NpgsqlConnectionCSharpExtensions =
     static member inline FindFirstByJsonPath<'TDoc when 'TDoc: null>(conn, tableName, jsonPath) =
         WithProps.Find.FirstByJsonPath<'TDoc>(tableName, jsonPath, Sql.existingConnection conn)
     
-    /// Update a full document
+    /// Update an entire document by its ID
     [<Extension>]
-    static member inline UpdateFull(conn, tableName, docId: 'TKey, document: 'TDoc) =
-        WithProps.Update.full tableName docId document (Sql.existingConnection conn)
+    static member inline UpdateById(conn, tableName, docId: 'TKey, document: 'TDoc) =
+        WithProps.Update.byId tableName docId document (Sql.existingConnection conn)
 
-    /// Update a full document
+    /// Update an entire document by its ID, using the provided function to obtain the ID from the document
     [<Extension>]
-    static member inline UpdateFullFunc(conn, tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc) =
-        WithProps.Update.FullFunc(tableName, idFunc, document, Sql.existingConnection conn)
+    static member inline UpdateByFunc(conn, tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc) =
+        WithProps.Update.ByFunc(tableName, idFunc, document, Sql.existingConnection conn)
 
-    /// Update a partial document
+    /// Patch a document by its ID
     [<Extension>]
-    static member inline UpdatePartialById(conn, tableName, docId: 'TKey, partial: 'TPartial) =
-        WithProps.Update.partialById tableName docId partial (Sql.existingConnection conn)
+    static member inline PatchById(conn, tableName, docId: 'TKey, patch: 'TPatch) =
+        WithProps.Patch.byId tableName docId patch (Sql.existingConnection conn)
     
-    /// Update partial documents using a JSON field comparison query in the WHERE clause (->> =)
+    /// Patch documents using a JSON field comparison query in the WHERE clause (->> =)
     [<Extension>]
-    static member inline UpdatePartialByField(conn, tableName, fieldName, op, value: obj, partial: 'TPartial) =
-        WithProps.Update.partialByField tableName fieldName op value partial (Sql.existingConnection conn)
+    static member inline PatchByField(conn, tableName, fieldName, op, value: obj, patch: 'TPatch) =
+        WithProps.Patch.byField tableName fieldName op value patch (Sql.existingConnection conn)
     
-    /// Update partial documents using a JSON containment query in the WHERE clause (@>)
+    /// Patch documents using a JSON containment query in the WHERE clause (@>)
     [<Extension>]
-    static member inline UpdatePartialByContains(conn, tableName, criteria: 'TCriteria, partial: 'TPartial) =
-        WithProps.Update.partialByContains tableName criteria partial (Sql.existingConnection conn)
+    static member inline PatchByContains(conn, tableName, criteria: 'TCriteria, patch: 'TPatch) =
+        WithProps.Patch.byContains tableName criteria patch (Sql.existingConnection conn)
     
-    /// Update partial documents using a JSON Path match query in the WHERE clause (@?)
+    /// Patch documents using a JSON Path match query in the WHERE clause (@?)
     [<Extension>]
-    static member inline UpdatePartialByJsonPath(conn, tableName, jsonPath, partial: 'TPartial) =
-        WithProps.Update.partialByJsonPath tableName jsonPath partial (Sql.existingConnection conn)
+    static member inline PatchByJsonPath(conn, tableName, jsonPath, patch: 'TPatch) =
+        WithProps.Patch.byJsonPath tableName jsonPath patch (Sql.existingConnection conn)
     
     /// Delete a document by its ID
     [<Extension>]

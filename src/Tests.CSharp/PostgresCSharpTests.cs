@@ -124,29 +124,29 @@ public class PostgresCSharpTests
                         "SELECT by JSON Path match query not correct");
                 })
             }),
-            TestList("Update", new[]
+            TestList("Patch", new[]
             {
-                TestCase("partialById succeeds", () =>
+                TestCase("ById succeeds", () =>
                 {
-                    Expect.equal(Postgres.Query.Update.PartialById(PostgresDb.TableName),
+                    Expect.equal(Postgres.Query.Patch.ById(PostgresDb.TableName),
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data ->> 'Id' = @id",
                         "UPDATE partial by ID statement not correct");
                 }),
-                TestCase("partialByField succeeds", () =>
+                TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Postgres.Query.Update.PartialByField(PostgresDb.TableName, "Snail", Op.LT),
+                    Expect.equal(Postgres.Query.Patch.ByField(PostgresDb.TableName, "Snail", Op.LT),
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data ->> 'Snail' < @field",
                         "UPDATE partial by ID statement not correct");
                 }),
-                TestCase("partialByContains succeeds", () =>
+                TestCase("ByContains succeeds", () =>
                 {
-                    Expect.equal(Postgres.Query.Update.PartialByContains(PostgresDb.TableName),
+                    Expect.equal(Postgres.Query.Patch.ByContains(PostgresDb.TableName),
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data @> @criteria",
                         "UPDATE partial by JSON containment statement not correct");
                 }),
-                TestCase("partialByJsonPath succeeds", () =>
+                TestCase("ByJsonPath succeeds", () =>
                 {
-                    Expect.equal(Postgres.Query.Update.PartialByJsonPath(PostgresDb.TableName),
+                    Expect.equal(Postgres.Query.Patch.ByJsonPath(PostgresDb.TableName),
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data @? @path::jsonpath",
                         "UPDATE partial by JSON Path statement not correct");
                 })
@@ -722,14 +722,14 @@ public class PostgresCSharpTests
         }),
         TestList("Update", new[]
         {
-            TestList("Full", new[]
+            TestList("ById", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
                     await using var db = PostgresDb.BuildDb();
                     await LoadDocs();
         
-                    await Update.Full(PostgresDb.TableName, "one",
+                    await Update.ById(PostgresDb.TableName, "one",
                         new JsonDocument { Id = "one", Sub = new() { Foo = "blue", Bar = "red" } });
                     var after = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "one");
                     Expect.isNotNull(after, "There should have been a document returned post-update");
@@ -748,18 +748,18 @@ public class PostgresCSharpTests
                     Expect.equal(before, 0, "There should have been no documents returned");
                     
                     // This not raising an exception is the test
-                    await Update.Full(PostgresDb.TableName, "test",
+                    await Update.ById(PostgresDb.TableName, "test",
                         new JsonDocument { Id = "x", Sub = new() { Foo = "blue", Bar = "red" } });
                 })
             }),
-            TestList("FullFunc", new[]
+            TestList("ByFunc", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
                     await using var db = PostgresDb.BuildDb();
                     await LoadDocs();
 
-                    await Update.FullFunc(PostgresDb.TableName, doc => doc.Id,
+                    await Update.ByFunc(PostgresDb.TableName, doc => doc.Id,
                         new JsonDocument { Id = "one", Value = "le un", NumValue = 1 });
                     var after = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "one");
                     Expect.isNotNull(after, "There should have been a document returned post-update");
@@ -776,18 +776,21 @@ public class PostgresCSharpTests
                     Expect.equal(before, 0, "There should have been no documents returned");
                     
                     // This not raising an exception is the test
-                    await Update.FullFunc(PostgresDb.TableName, doc => doc.Id,
+                    await Update.ByFunc(PostgresDb.TableName, doc => doc.Id,
                         new JsonDocument { Id = "one", Value = "le un", NumValue = 1 });
                 })
-            }),
-            TestList("PartialById", new[]
+            })
+        }),
+        TestList("Patch", new[]
+        {
+            TestList("ById", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
                     await using var db = PostgresDb.BuildDb();
                     await LoadDocs();
 
-                    await Update.PartialById(PostgresDb.TableName, "one", new { NumValue = 44 });
+                    await Patch.ById(PostgresDb.TableName, "one", new { NumValue = 44 });
                     var after = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "one");
                     Expect.isNotNull(after, "There should have been a document returned post-update");
                     Expect.equal(after.NumValue, 44, "The updated document is not correct");
@@ -800,17 +803,17 @@ public class PostgresCSharpTests
                     Expect.equal(before, 0, "There should have been no documents returned");
                     
                     // This not raising an exception is the test
-                    await Update.PartialById(PostgresDb.TableName, "test", new { Foo = "green" });
+                    await Patch.ById(PostgresDb.TableName, "test", new { Foo = "green" });
                 })
             }),
-            TestList("PartialByField", new[]
+            TestList("ByField", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
                     await using var db = PostgresDb.BuildDb();
                     await LoadDocs();
 
-                    await Update.PartialByField(PostgresDb.TableName, "Value", Op.EQ, "purple", new { NumValue = 77 });
+                    await Patch.ByField(PostgresDb.TableName, "Value", Op.EQ, "purple", new { NumValue = 77 });
                     var after = await Count.ByField(PostgresDb.TableName, "NumValue", Op.EQ, "77");
                     Expect.equal(after, 2, "There should have been 2 documents returned");
                 }),
@@ -822,19 +825,17 @@ public class PostgresCSharpTests
                     Expect.equal(before, 0, "There should have been no documents returned");
                     
                     // This not raising an exception is the test
-                    await Update.PartialByField(PostgresDb.TableName, "Value", Op.EQ, "burgundy",
-                        new { Foo = "green" });
+                    await Patch.ByField(PostgresDb.TableName, "Value", Op.EQ, "burgundy", new { Foo = "green" });
                 })
             }),
-            TestList("PartialByContains", new[]
+            TestList("ByContains", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
                     await using var db = PostgresDb.BuildDb();
                     await LoadDocs();
 
-                    await Update.PartialByContains(PostgresDb.TableName, new { Value = "purple" },
-                        new { NumValue = 77 });
+                    await Patch.ByContains(PostgresDb.TableName, new { Value = "purple" }, new { NumValue = 77 });
                     var after = await Count.ByContains(PostgresDb.TableName, new { NumValue = 77 });
                     Expect.equal(after, 2, "There should have been 2 documents returned");
                 }),
@@ -846,19 +847,17 @@ public class PostgresCSharpTests
                     Expect.equal(before, 0, "There should have been no documents returned");
                     
                     // This not raising an exception is the test
-                    await Update.PartialByContains(PostgresDb.TableName, new { Value = "burgundy" },
-                        new { Foo = "green" });
+                    await Patch.ByContains(PostgresDb.TableName, new { Value = "burgundy" }, new { Foo = "green" });
                 })
             }),
-            TestList("PartialByJsonPath", new[]
+            TestList("ByJsonPath", new[]
             {
                 TestCase("succeeds when a document is updated", async () =>
                 {
                     await using var db = PostgresDb.BuildDb();
                     await LoadDocs();
 
-                    await Update.PartialByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ > 10)",
-                        new { NumValue = 1000 });
+                    await Patch.ByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ > 10)", new { NumValue = 1000 });
                     var after = await Count.ByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ > 999)");
                     Expect.equal(after, 2, "There should have been 2 documents returned");
                 }),
@@ -870,7 +869,7 @@ public class PostgresCSharpTests
                     Expect.equal(before, 0, "There should have been no documents returned");
                     
                     // This not raising an exception is the test
-                    await Update.PartialByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ < 0)", new { Foo = "green" });
+                    await Patch.ByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ < 0)", new { Foo = "green" });
                 })
             })
         }),

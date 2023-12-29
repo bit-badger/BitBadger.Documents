@@ -95,6 +95,12 @@ let all =
                     $"INSERT INTO {tbl} VALUES (@data) ON CONFLICT ((data ->> 'Id')) DO UPDATE SET data = EXCLUDED.data"
                     "INSERT ON CONFLICT UPDATE statement not correct"
             }
+            test "update succeeds" {
+                Expect.equal
+                    (Query.update tbl)
+                    $"UPDATE {tbl} SET data = @data WHERE data ->> 'Id' = @id"
+                    "UPDATE full statement not correct"
+            }
             testList "Count" [
                 test "all succeeds" {
                     Expect.equal (Query.Count.all tbl) $"SELECT COUNT(*) AS it FROM {tbl}" "Count query not correct"
@@ -132,14 +138,6 @@ let all =
                         (Query.Find.byField tbl "Golf" GE)
                         $"SELECT data FROM {tbl} WHERE data ->> 'Golf' >= @field"
                         "SELECT by JSON comparison query not correct"
-                }
-            ]
-            testList "Update" [
-                test "full succeeds" {
-                    Expect.equal
-                        (Query.Update.full tbl)
-                        $"UPDATE {tbl} SET data = @data WHERE data ->> 'Id' = @id"
-                        "UPDATE full statement not correct"
                 }
             ]
             testList "Delete" [

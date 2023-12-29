@@ -558,7 +558,7 @@ public class PostgresCSharpExtensionTests
                 Expect.isNull(doc, "There should not have been a document returned");
             })
         }),
-        TestList("UpdateFull", new[]
+        TestList("UpdateById", new[]
         {
             TestCase("succeeds when a document is updated", async () =>
             {
@@ -566,7 +566,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.UpdateFull(PostgresDb.TableName, "one",
+                await conn.UpdateById(PostgresDb.TableName, "one",
                     new JsonDocument { Id = "one", Sub = new() { Foo = "blue", Bar = "red" } });
                 var after = await conn.FindById<string, JsonDocument>(PostgresDb.TableName, "one");
                 Expect.isNotNull(after, "There should have been a document returned post-update");
@@ -585,11 +585,11 @@ public class PostgresCSharpExtensionTests
                 Expect.equal(before, 0, "There should have been no documents returned");
                 
                 // This not raising an exception is the test
-                await conn.UpdateFull(PostgresDb.TableName, "test",
+                await conn.UpdateById(PostgresDb.TableName, "test",
                     new JsonDocument { Id = "x", Sub = new() { Foo = "blue", Bar = "red" } });
             })
         }),
-        TestList("UpdateFullFunc", new[]
+        TestList("UpdateByFunc", new[]
         {
             TestCase("succeeds when a document is updated", async () =>
             {
@@ -597,7 +597,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.UpdateFullFunc(PostgresDb.TableName, doc => doc.Id,
+                await conn.UpdateByFunc(PostgresDb.TableName, doc => doc.Id,
                     new JsonDocument { Id = "one", Value = "le un", NumValue = 1 });
                 var after = await conn.FindById<string, JsonDocument>(PostgresDb.TableName, "one");
                 Expect.isNotNull(after, "There should have been a document returned post-update");
@@ -614,11 +614,11 @@ public class PostgresCSharpExtensionTests
                 Expect.equal(before, 0, "There should have been no documents returned");
                 
                 // This not raising an exception is the test
-                await conn.UpdateFullFunc(PostgresDb.TableName, doc => doc.Id,
+                await conn.UpdateByFunc(PostgresDb.TableName, doc => doc.Id,
                     new JsonDocument { Id = "one", Value = "le un", NumValue = 1 });
             })
         }),
-        TestList("UpdatePartialById", new[]
+        TestList("PatchById", new[]
         {
             TestCase("succeeds when a document is updated", async () =>
             {
@@ -626,7 +626,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.UpdatePartialById(PostgresDb.TableName, "one", new { NumValue = 44 });
+                await conn.PatchById(PostgresDb.TableName, "one", new { NumValue = 44 });
                 var after = await conn.FindById<string, JsonDocument>(PostgresDb.TableName, "one");
                 Expect.isNotNull(after, "There should have been a document returned post-update");
                 Expect.equal(after.NumValue, 44, "The updated document is not correct");
@@ -639,10 +639,10 @@ public class PostgresCSharpExtensionTests
                 Expect.equal(before, 0, "There should have been no documents returned");
                 
                 // This not raising an exception is the test
-                await conn.UpdatePartialById(PostgresDb.TableName, "test", new { Foo = "green" });
+                await conn.PatchById(PostgresDb.TableName, "test", new { Foo = "green" });
             })
         }),
-        TestList("UpdatePartialByField", new[]
+        TestList("PatchByField", new[]
         {
             TestCase("succeeds when a document is updated", async () =>
             {
@@ -650,7 +650,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.UpdatePartialByField(PostgresDb.TableName, "Value", Op.EQ, "purple", new { NumValue = 77 });
+                await conn.PatchByField(PostgresDb.TableName, "Value", Op.EQ, "purple", new { NumValue = 77 });
                 var after = await conn.CountByField(PostgresDb.TableName, "NumValue", Op.EQ, "77");
                 Expect.equal(after, 2, "There should have been 2 documents returned");
             }),
@@ -662,11 +662,10 @@ public class PostgresCSharpExtensionTests
                 Expect.equal(before, 0, "There should have been no documents returned");
                 
                 // This not raising an exception is the test
-                await conn.UpdatePartialByField(PostgresDb.TableName, "Value", Op.EQ, "burgundy",
-                    new { Foo = "green" });
+                await conn.PatchByField(PostgresDb.TableName, "Value", Op.EQ, "burgundy", new { Foo = "green" });
             })
         }),
-        TestList("UpdatePartialByContains", new[]
+        TestList("PatchByContains", new[]
         {
             TestCase("succeeds when a document is updated", async () =>
             {
@@ -674,8 +673,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.UpdatePartialByContains(PostgresDb.TableName, new { Value = "purple" },
-                    new { NumValue = 77 });
+                await conn.PatchByContains(PostgresDb.TableName, new { Value = "purple" }, new { NumValue = 77 });
                 var after = await conn.CountByContains(PostgresDb.TableName, new { NumValue = 77 });
                 Expect.equal(after, 2, "There should have been 2 documents returned");
             }),
@@ -687,11 +685,10 @@ public class PostgresCSharpExtensionTests
                 Expect.equal(before, 0, "There should have been no documents returned");
                 
                 // This not raising an exception is the test
-                await conn.UpdatePartialByContains(PostgresDb.TableName, new { Value = "burgundy" },
-                    new { Foo = "green" });
+                await conn.PatchByContains(PostgresDb.TableName, new { Value = "burgundy" }, new { Foo = "green" });
             })
         }),
-        TestList("UpdatePartialByJsonPath", new[]
+        TestList("PatchByJsonPath", new[]
         {
             TestCase("succeeds when a document is updated", async () =>
             {
@@ -699,8 +696,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.UpdatePartialByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ > 10)",
-                    new { NumValue = 1000 });
+                await conn.PatchByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ > 10)", new { NumValue = 1000 });
                 var after = await conn.CountByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ > 999)");
                 Expect.equal(after, 2, "There should have been 2 documents returned");
             }),
@@ -712,7 +708,7 @@ public class PostgresCSharpExtensionTests
                 Expect.equal(before, 0, "There should have been no documents returned");
                 
                 // This not raising an exception is the test
-                await conn.UpdatePartialByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ < 0)", new { Foo = "green" });
+                await conn.PatchByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ < 0)", new { Foo = "green" });
             })
         }),
         TestList("DeleteById", new[]

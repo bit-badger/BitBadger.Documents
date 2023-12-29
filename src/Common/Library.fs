@@ -163,6 +163,11 @@ module Query =
             "INSERT INTO %s VALUES (@data) ON CONFLICT ((data ->> '%s')) DO UPDATE SET data = EXCLUDED.data"
             tableName (Configuration.idField ()) 
     
+    /// Query to update a document
+    [<CompiledName "Update">]
+    let update tableName =
+        $"""UPDATE %s{tableName} SET data = @data WHERE {whereById "@id"}"""
+
     /// Queries for counting documents
     module Count =
         
@@ -202,14 +207,6 @@ module Query =
         let byField tableName fieldName op =
             $"""{selectFromTable tableName} WHERE {whereByField fieldName op "@field"}"""
         
-    /// Queries to update documents
-    module Update =
-
-        /// Query to update a document
-        [<CompiledName "Full">]
-        let full tableName =
-            $"""UPDATE %s{tableName} SET data = @data WHERE {whereById "@id"}"""
-
     /// Queries to delete documents
     module Delete =
         

@@ -298,7 +298,7 @@ module WithConn =
         /// Update an entire document
         [<CompiledName "Full">]
         let full tableName (docId: 'TKey) (document: 'TDoc) conn =
-            Custom.nonQuery (Query.Update.full tableName) [ idParam docId; jsonParam "@data" document ] conn
+            Custom.nonQuery (Query.update tableName) [ idParam docId; jsonParam "@data" document ] conn
         
         /// Update an entire document
         [<CompiledName "FSharpFullFunc">]

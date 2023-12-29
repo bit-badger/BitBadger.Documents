@@ -172,6 +172,11 @@ public static class CommonCSharpTests
                     $"INSERT INTO tbl VALUES (@data) ON CONFLICT ((data ->> 'Id')) DO UPDATE SET data = EXCLUDED.data",
                     "INSERT ON CONFLICT UPDATE statement not correct");
             }),
+            TestCase("Update succeeds", () =>
+            {
+                Expect.equal(Query.Update("tbl"), "UPDATE tbl SET data = @data WHERE data ->> 'Id' = @id",
+                    "UPDATE full statement not correct");
+            }),
             TestList("Count", new[]
             {
                 TestCase("All succeeds", () =>
@@ -213,11 +218,6 @@ public static class CommonCSharpTests
                         "SELECT data FROM tbl WHERE data ->> 'Golf' >= @field",
                         "SELECT by JSON comparison query not correct");
                 })
-            }),
-            TestCase("Update.Full succeeds", () =>
-            {
-                Expect.equal(Query.Update.Full("tbl"), "UPDATE tbl SET data = @data WHERE data ->> 'Id' = @id",
-                    "UPDATE full statement not correct");
             }),
             TestList("Delete", new[]
             {

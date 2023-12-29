@@ -142,27 +142,27 @@ module Query =
         let byJsonPath tableName =
             $"""{Query.selectFromTable tableName} WHERE {whereJsonPathMatches "@path"}"""
     
-    /// Queries to update documents
-    module Update =
+    /// Queries to patch (partially update) documents
+    module Patch =
 
-        /// Query to update a document
-        [<CompiledName "PartialById">]
-        let partialById tableName =
+        /// Query to patch a document by its ID
+        [<CompiledName "ById">]
+        let byId tableName =
             $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereById "@id"}"""
         
-        /// Query to update a document
-        [<CompiledName "PartialByField">]
-        let partialByField tableName fieldName op =
+        /// Query to patch documents match a JSON field comparison (->> =)
+        [<CompiledName "ByField">]
+        let byField tableName fieldName op =
             $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereByField fieldName op "@field"}"""
         
-        /// Query to update partial documents matching a JSON containment query (@>)
-        [<CompiledName "PartialByContains">]
-        let partialByContains tableName =
+        /// Query to patch documents matching a JSON containment query (@>)
+        [<CompiledName "ByContains">]
+        let byContains tableName =
             $"""UPDATE %s{tableName} SET data = data || @data WHERE {whereDataContains "@criteria"}"""
 
-        /// Query to update partial documents matching a JSON containment query (@>)
-        [<CompiledName "PartialByJsonPath">]
-        let partialByJsonPath tableName =
+        /// Query to patch documents matching a JSON containment query (@>)
+        [<CompiledName "ByJsonPath">]
+        let byJsonPath tableName =
             $"""UPDATE %s{tableName} SET data = data || @data WHERE {whereJsonPathMatches "@path"}"""
 
     /// Queries to delete documents
@@ -436,48 +436,46 @@ module WithProps =
     [<RequireQualifiedAccess>]
     module Update =
         
-        /// Update an entire document
-        [<CompiledName "Full">]
-        let full tableName (docId: 'TKey) (document: 'TDoc) sqlProps =
-            Custom.nonQuery (Query.Update.full tableName) [ idParam docId; jsonParam "@data" document ] sqlProps
+        /// Update an entire document by its ID
+        [<CompiledName "ById">]
+        let byId tableName (docId: 'TKey) (document: 'TDoc) sqlProps =
+            Custom.nonQuery (Query.update tableName) [ idParam docId; jsonParam "@data" document ] sqlProps
         
-        /// Update an entire document
-        [<CompiledName "FSharpFullFunc">]
-        let fullFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) sqlProps =
-            full tableName (idFunc document) document sqlProps
+        /// Update an entire document by its ID, using the provided function to obtain the ID from the document
+        [<CompiledName "FSharpByFunc">]
+        let byFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) sqlProps =
+            byId tableName (idFunc document) document sqlProps
         
-        /// Update an entire document
-        let FullFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc, sqlProps) =
-            fullFunc tableName idFunc.Invoke document sqlProps
+        /// Update an entire document by its ID, using the provided function to obtain the ID from the document
+        let ByFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc, sqlProps) =
+            byFunc tableName idFunc.Invoke document sqlProps
+
+    /// Commands to patch (partially update) documents
+    [<RequireQualifiedAccess>]
+    module Patch =
         
-        /// Update a partial document
-        [<CompiledName "PartialById">]
-        let partialById tableName (docId: 'TKey) (partial: 'TPartial) sqlProps =
-            Custom.nonQuery (Query.Update.partialById tableName) [ idParam docId; jsonParam "@data" partial ] sqlProps
+        /// Patch a document by its ID
+        [<CompiledName "ById">]
+        let byId tableName (docId: 'TKey) (patch: 'TPatch) sqlProps =
+            Custom.nonQuery (Query.Patch.byId tableName) [ idParam docId; jsonParam "@data" patch ] sqlProps
         
-        /// Update partial documents using a JSON field comparison query in the WHERE clause (->> =)
-        [<CompiledName "PartialByField">]
-        let partialByField tableName fieldName op (value: obj) (partial: 'TPartial) sqlProps =
+        /// Patch documents using a JSON field comparison query in the WHERE clause (->> =)
+        [<CompiledName "ByField">]
+        let byField tableName fieldName op (value: obj) (patch: 'TPatch) sqlProps =
             Custom.nonQuery
-                (Query.Update.partialByField tableName fieldName op)
-                [ jsonParam "@data" partial; fieldParam value ]
-                sqlProps
+                (Query.Patch.byField tableName fieldName op) [ jsonParam "@data" patch; fieldParam value ] sqlProps
         
-        /// Update partial documents using a JSON containment query in the WHERE clause (@>)
-        [<CompiledName "PartialByContains">]
-        let partialByContains tableName (criteria: 'TContains) (partial: 'TPartial) sqlProps =
+        /// Patch documents using a JSON containment query in the WHERE clause (@>)
+        [<CompiledName "ByContains">]
+        let byContains tableName (criteria: 'TContains) (patch: 'TPatch) sqlProps =
             Custom.nonQuery
-                (Query.Update.partialByContains tableName)
-                [ jsonParam "@data" partial; jsonParam "@criteria" criteria ]
-                sqlProps
+                (Query.Patch.byContains tableName) [ jsonParam "@data" patch; jsonParam "@criteria" criteria ] sqlProps
         
-        /// Update partial documents using a JSON Path match query in the WHERE clause (@?)
-        [<CompiledName "PartialByJsonPath">]
-        let partialByJsonPath tableName jsonPath (partial: 'TPartial) sqlProps =
+        /// Patch documents using a JSON Path match query in the WHERE clause (@?)
+        [<CompiledName "ByJsonPath">]
+        let byJsonPath tableName jsonPath (patch: 'TPatch) sqlProps =
             Custom.nonQuery
-                (Query.Update.partialByJsonPath tableName)
-                [ jsonParam "@data" partial; "@path", Sql.string jsonPath ]
-                sqlProps
+                (Query.Patch.byJsonPath tableName) [ jsonParam "@data" patch; "@path", Sql.string jsonPath ] sqlProps
 
     /// Commands to delete documents
     [<RequireQualifiedAccess>]
@@ -707,39 +705,44 @@ module Find =
 [<RequireQualifiedAccess>]
 module Update =
 
-    /// Update a full document
-    [<CompiledName "Full">]
-    let full tableName (docId: 'TKey) (document: 'TDoc) =
-        WithProps.Update.full tableName docId document (fromDataSource ())
+    /// Update an entire document by its ID
+    [<CompiledName "ById">]
+    let byId tableName (docId: 'TKey) (document: 'TDoc) =
+        WithProps.Update.byId tableName docId document (fromDataSource ())
 
-    /// Update a full document
+    /// Update an entire document by its ID, using the provided function to obtain the ID from the document
     [<CompiledName "FSharpFullFunc">]
-    let fullFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
-        WithProps.Update.fullFunc tableName idFunc document (fromDataSource ())
+    let byFunc tableName (idFunc: 'TDoc -> 'TKey) (document: 'TDoc) =
+        WithProps.Update.byFunc tableName idFunc document (fromDataSource ())
+    
+    /// Update an entire document by its ID, using the provided function to obtain the ID from the document
+    let ByFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc) =
+        WithProps.Update.ByFunc(tableName, idFunc, document, fromDataSource ())
 
-    /// Update a full document
-    let FullFunc(tableName, idFunc: System.Func<'TDoc, 'TKey>, document: 'TDoc) =
-        WithProps.Update.FullFunc(tableName, idFunc, document, fromDataSource ())
 
-    /// Update a partial document
-    [<CompiledName "PartialById">]
-    let partialById tableName (docId: 'TKey) (partial: 'TPartial) =
-        WithProps.Update.partialById tableName docId partial (fromDataSource ())
+/// Commands to patch (partially update) documents
+[<RequireQualifiedAccess>]
+module Patch =
     
-    /// Update partial documents using a JSON field comparison query in the WHERE clause (->> =)
-    [<CompiledName "PartialByField">]
-    let partialByField tableName fieldName op (value: obj) (partial: 'TPartial) =
-        WithProps.Update.partialByField tableName fieldName op value partial (fromDataSource ())
+    /// Patch a document by its ID
+    [<CompiledName "ById">]
+    let byId tableName (docId: 'TKey) (patch: 'TPatch) =
+        WithProps.Patch.byId tableName docId patch (fromDataSource ())
     
-    /// Update partial documents using a JSON containment query in the WHERE clause (@>)
-    [<CompiledName "PartialByContains">]
-    let partialByContains tableName (criteria: 'TCriteria) (partial: 'TPartial) =
-        WithProps.Update.partialByContains tableName criteria partial (fromDataSource ())
+    /// Patch documents using a JSON field comparison query in the WHERE clause (->> =)
+    [<CompiledName "ByField">]
+    let byField tableName fieldName op (value: obj) (patch: 'TPatch) =
+        WithProps.Patch.byField tableName fieldName op value patch (fromDataSource ())
     
-    /// Update partial documents using a JSON Path match query in the WHERE clause (@?)
-    [<CompiledName "PartialByJsonPath">]
-    let partialByJsonPath tableName jsonPath (partial: 'TPartial) =
-        WithProps.Update.partialByJsonPath tableName jsonPath partial (fromDataSource ())
+    /// Patch documents using a JSON containment query in the WHERE clause (@>)
+    [<CompiledName "ByContains">]
+    let byContains tableName (criteria: 'TCriteria) (patch: 'TPatch) =
+        WithProps.Patch.byContains tableName criteria patch (fromDataSource ())
+    
+    /// Patch documents using a JSON Path match query in the WHERE clause (@?)
+    [<CompiledName "ByJsonPath">]
+    let byJsonPath tableName jsonPath (patch: 'TPatch) =
+        WithProps.Patch.byJsonPath tableName jsonPath patch (fromDataSource ())
 
 
 /// Commands to delete documents
