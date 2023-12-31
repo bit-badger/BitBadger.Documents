@@ -200,11 +200,25 @@ public static class SqliteCSharpTests
 
                 async ValueTask<bool> ItExists(string name)
                 {
-                    var result = await Custom.Scalar(
+                    return await Custom.Scalar(
                         $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = @name) AS it",
-                        new SqliteParameter[] { new("@name", name) }, rdr => rdr.GetInt64(0));
-                    return result > 0L;
+                        new SqliteParameter[] { new("@name", name) }, Results.ToExists);
                 }
+            }),
+            TestCase("EnsureFieldIndex succeeds", async () =>
+            {
+                await using var db = await SqliteDb.BuildDb();
+                var indexExists = () => Custom.Scalar(
+                    $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = 'idx_ensured_test') AS it",
+                    Parameters.None, Results.ToExists);
+
+                var exists = await indexExists();
+                Expect.isFalse(exists, "The index should not exist already");
+
+                await Definition.EnsureTable("ensured");
+                await Definition.EnsureFieldIndex("ensured", "test", new[] { "Id", "Category" });
+                exists = await indexExists();
+                Expect.isTrue(exists, "The index should now exist");
             })
         }),
         TestList("Document.Insert", new[]

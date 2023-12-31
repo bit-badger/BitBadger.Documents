@@ -103,21 +103,16 @@ module Results =
             it <- Seq.append it (Seq.singleton (mapFunc rdr))
         return List.ofSeq it
     }
-
-    /// Create a list of items for the results of the given command, using the specified mapping function
-    let ToCustomList<'TDoc>(cmd, mapFunc: System.Func<SqliteDataReader, 'TDoc>) = backgroundTask {
-        let! results = toCustomList<'TDoc> cmd mapFunc.Invoke
-        return ResizeArray<'TDoc> results
-    }
-
-    /// Create a list of items for the results of the given command
-    [<CompiledName "FSharpToDocumentList">]
-    let toDocumentList<'TDoc> (cmd: SqliteCommand) =
-        toCustomList<'TDoc> cmd fromData
-
-    /// Create a list of items for the results of the given command
-    let ToDocumentList<'TDoc> cmd =
-        ToCustomList<'TDoc>(cmd, fromData<'TDoc>)
+    
+    /// Extract a count from the first column
+    [<CompiledName "ToCount">]
+    let toCount (row: SqliteDataReader) =
+        row.GetInt64 0
+    
+    /// Extract a true/false value from a count in the first column
+    [<CompiledName "ToExists">]
+    let toExists row =
+        toCount(row) > 0L
 
 
 [<AutoOpen>]
@@ -203,8 +198,8 @@ module WithConn =
         }
         
         /// Create an index on a document table
-        [<CompiledName "EnsureIndex">]
-        let ensureIndex tableName indexName fields conn =
+        [<CompiledName "EnsureFieldIndex">]
+        let ensureFieldIndex tableName indexName fields conn =
             Custom.nonQuery (Query.Definition.ensureIndexOn tableName indexName fields) [] conn
 
     /// Insert a new document
@@ -224,30 +219,26 @@ module WithConn =
         /// Count all documents in a table
         [<CompiledName "All">]
         let all tableName conn =
-            Custom.scalar (Query.Count.all tableName) [] (_.GetInt64(0)) conn
+            Custom.scalar (Query.Count.all tableName) [] toCount conn
         
         /// Count matching documents using a comparison on a JSON field
         [<CompiledName "ByField">]
         let byField tableName fieldName op (value: obj) conn =
-            Custom.scalar (Query.Count.byField tableName fieldName op) [  fieldParam value ] (_.GetInt64(0)) conn
+            Custom.scalar (Query.Count.byField tableName fieldName op) [  fieldParam value ] toCount conn
 
     /// Commands to determine if documents exist
     [<RequireQualifiedAccess>]
     module Exists =
         
-        /// SQLite returns a 0 for not-exists and 1 for exists
-        let private exists (rdr: SqliteDataReader) =
-            rdr.GetInt64(0) > 0
-        
         /// Determine if a document exists for the given ID
         [<CompiledName "ById">]
         let byId tableName (docId: 'TKey) conn =
-            Custom.scalar (Query.Exists.byId tableName) [ idParam docId ] exists conn
+            Custom.scalar (Query.Exists.byId tableName) [ idParam docId ] toExists conn
 
         /// Determine if a document exists using a comparison on a JSON field
         [<CompiledName "ByField">]
         let byField tableName fieldName op (value: obj) conn =
-            Custom.scalar (Query.Exists.byField tableName fieldName op) [ fieldParam value ] exists conn
+            Custom.scalar (Query.Exists.byField tableName fieldName op) [ fieldParam value ] toExists conn
     
     /// Commands to retrieve documents
     [<RequireQualifiedAccess>]
@@ -391,6 +382,12 @@ module Definition =
     let ensureTable name =
         use conn = Configuration.dbConn ()
         WithConn.Definition.ensureTable name conn
+    
+    /// Create an index on a document table
+    [<CompiledName "EnsureFieldIndex">]
+    let ensureFieldIndex tableName indexName fields =
+        use conn = Configuration.dbConn ()
+        WithConn.Definition.ensureFieldIndex tableName indexName fields conn
 
 /// Document insert/save functions
 [<AutoOpen>]

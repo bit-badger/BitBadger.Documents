@@ -108,12 +108,9 @@ public static class SqliteCSharpExtensionTests
             await using var conn = Sqlite.Configuration.DbConn();
 
             Func<string, ValueTask<bool>> itExists = async name =>
-            {
-                var result = await conn.CustomScalar(
+                await conn.CustomScalar(
                     $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = @name) AS it",
-                    new SqliteParameter[] { new("@name", name) }, rdr => rdr.GetInt64(0));
-                return result > 0L;
-            };
+                    new SqliteParameter[] { new("@name", name) }, Results.ToExists);
 
             var exists = await itExists("ensured");
             var alsoExists = await itExists("idx_ensured_key");
@@ -126,6 +123,22 @@ public static class SqliteCSharpExtensionTests
             alsoExists = await itExists("idx_ensured_key");
             Expect.isTrue(exists, "The table should now exist");
             Expect.isTrue(alsoExists, "The key index should now exist");
+        }),
+        TestCase("EnsureFieldIndex succeeds", async () =>
+        {
+            await using var db = await SqliteDb.BuildDb();
+            await using var conn = Sqlite.Configuration.DbConn();
+            var indexExists = () => conn.CustomScalar(
+                $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = 'idx_ensured_test') AS it",
+                Parameters.None, Results.ToExists);
+
+            var exists = await indexExists();
+            Expect.isFalse(exists, "The index should not exist already");
+
+            await conn.EnsureTable("ensured");
+            await conn.EnsureFieldIndex("ensured", "test", new[] { "Id", "Category" });
+            exists = await indexExists();
+            Expect.isTrue(exists, "The index should now exist");
         }),
         TestList("Insert", new[]
         {

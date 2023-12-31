@@ -29,8 +29,8 @@ module Extensions =
             WithConn.Definition.ensureTable name conn
         
         /// Create an index on a document table
-        member conn.ensureIndex tableName indexName fields =
-            WithConn.Definition.ensureIndex tableName indexName fields conn
+        member conn.ensureFieldIndex tableName indexName fields =
+            WithConn.Definition.ensureFieldIndex tableName indexName fields conn
         
         /// Insert a new document
         member conn.insert<'TDoc> tableName (document: 'TDoc) =
@@ -131,8 +131,8 @@ type SqliteConnectionCSharpExtensions =
 
     /// Create an index on one or more fields in a document table
     [<Extension>]
-    static member inline EnsureIndex(conn, tableName, indexName, fields) =
-        WithConn.Definition.ensureIndex tableName indexName fields conn
+    static member inline EnsureFieldIndex(conn, tableName, indexName, fields) =
+        WithConn.Definition.ensureFieldIndex tableName indexName fields conn
 
     /// Insert a new document
     [<Extension>]

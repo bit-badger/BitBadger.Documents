@@ -16,14 +16,11 @@ let integrationTests =
         testTask "ensureTable succeeds" {
             use! db   = SqliteDb.BuildDb()
             use  conn = Configuration.dbConn ()
-            let itExists (name: string) = task {
-                let! result =
-                    conn.customScalar
-                        $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = @name) AS it"
-                        [ SqliteParameter("@name", name) ]
-                        _.GetInt64(0)
-                return result > 0
-            }
+            let itExists (name: string) =
+                conn.customScalar
+                    $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = @name) AS it"
+                    [ SqliteParameter("@name", name) ]
+                    toExists
             
             let! exists     = itExists "ensured"
             let! alsoExists = itExists "idx_ensured_key"
@@ -35,6 +32,23 @@ let integrationTests =
             let! alsoExists' = itExists "idx_ensured_key"
             Expect.isTrue exists'    "The table should now exist"
             Expect.isTrue alsoExists' "The key index should now exist"
+        }
+        testTask "ensureFieldIndex succeeds" {
+            use! db   = SqliteDb.BuildDb()
+            use  conn = Configuration.dbConn ()
+            let indexExists () =
+                conn.customScalar
+                    $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = 'idx_ensured_test') AS it"
+                    []
+                    toExists
+            
+            let! exists = indexExists ()
+            Expect.isFalse exists "The index should not exist already"
+    
+            do! conn.ensureTable      "ensured"
+            do! conn.ensureFieldIndex "ensured" "test" [ "Name"; "Age" ]
+            let! exists' = indexExists ()
+            Expect.isTrue exists' "The index should now exist"
         }
         testList "insert" [
             testTask "succeeds" {

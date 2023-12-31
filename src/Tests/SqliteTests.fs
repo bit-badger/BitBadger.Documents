@@ -184,14 +184,11 @@ let integrationTests =
         testList "Definition" [
             testTask "ensureTable succeeds" {
                 use! db = SqliteDb.BuildDb()
-                let itExists (name: string) = task {
-                    let! result =
-                        Custom.scalar
-                            $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = @name) AS it"
-                            [ SqliteParameter("@name", name) ]
-                            _.GetInt64(0)
-                    return result > 0
-                }
+                let itExists (name: string) =
+                    Custom.scalar
+                        $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = @name) AS it"
+                        [ SqliteParameter("@name", name) ]
+                        toExists
                 
                 let! exists     = itExists "ensured"
                 let! alsoExists = itExists "idx_ensured_key"
@@ -203,6 +200,22 @@ let integrationTests =
                 let! alsoExists' = itExists "idx_ensured_key"
                 Expect.isTrue exists'    "The table should now exist"
                 Expect.isTrue alsoExists' "The key index should now exist"
+            }
+            testTask "ensureFieldIndex succeeds" {
+                use! db = SqliteDb.BuildDb()
+                let indexExists () =
+                    Custom.scalar
+                        $"SELECT EXISTS (SELECT 1 FROM {SqliteDb.Catalog} WHERE name = 'idx_ensured_test') AS it"
+                        []
+                        toExists
+                
+                let! exists = indexExists ()
+                Expect.isFalse exists "The index should not exist already"
+        
+                do! Definition.ensureTable      "ensured"
+                do! Definition.ensureFieldIndex "ensured" "test" [ "Name"; "Age" ]
+                let! exists' = indexExists ()
+                Expect.isTrue exists' "The index should now exist"
             }
         ]
         testList "insert" [
