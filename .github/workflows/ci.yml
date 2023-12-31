@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        dotnet-version: [ "6.0", "7.0", "8.0" ]
+        postgres-version: [ "12", "13", "14", "15", "latest" ]
+    
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET ${{ matrix.dotnet-version }}.x
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}.x
+    - name: Restore dependencies
+      run: dotnet restore src/BitBadger.Documents.sln
+    - name: Build
+      run: dotnet build src/BitBadger.Documents.sln --no-restore
+    - name: Test ${{ matrix.dotnet-version }} against PostgreSQL ${{ matrix.postgres-version }}
+      run: dotnet run --project src/Tests/BitBadger.Documents.Tests.fsproj -f net${{ matrix.dotnet-version }}
+  publish:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: "8.0"
+    - name: Package Common Library
+      run: dotnet pack src/Common/BitBadger.Documents.Common.fsproj -c Release
+    - name: Move Common package
+      run: cp src/Common/bin/Release/BitBadger.Documents.Common.*.nupkg .
+    - name: Package PostgreSQL Library
+      run: dotnet pack src/Postgres/BitBadger.Documents.Postgres.fsproj -c Release
+    - name: Move PostgreSQL package
+      run: cp src/Postgres/bin/Release/BitBadger.Documents.Postgres.*.nupkg .
+    - name: Package SQLite Library
+      run: dotnet pack src/Sqlite/BitBadger.Documents.Sqlite.fsproj -c Release
+    - name: Move SQLite package
+      run: cp src/Sqlite/bin/Release/BitBadger.Documents.Sqlite.*.nupkg .
+    - name: Save Packages
+      uses: actions/upload-artifact@v3
+      with:
+        name: packages
+        path: |
+          *.nupkg
