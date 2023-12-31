@@ -38,7 +38,7 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore src/BitBadger.Documents.sln
     - name: Build
-      run: dotnet build src/BitBadger.Documents.sln --no-restore
+      run: dotnet build src/BitBadger.Documents.sln --no-restore -f net${{ matrix.dotnet-version }}
     - name: Test ${{ matrix.dotnet-version }} against PostgreSQL ${{ matrix.postgres-version }}
       run: dotnet run --project src/Tests/BitBadger.Documents.Tests.fsproj -f net${{ matrix.dotnet-version }}
   publish:
