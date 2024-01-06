@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="CommonTests.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="PostgresTests.fs" />
+    <Compile Include="PostgresExtensionTests.fs" />
+    <Compile Include="SqliteTests.fs" />
+    <Compile Include="SqliteExtensionTests.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Expecto" Version="10.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Common\BitBadger.Documents.Common.fsproj" />
+    <ProjectReference Include="..\Postgres\BitBadger.Documents.Postgres.fsproj" />
+    <ProjectReference Include="..\Sqlite\BitBadger.Documents.Sqlite.fsproj" />
+    <ProjectReference Include="..\Tests.CSharp\BitBadger.Documents.Tests.CSharp.csproj" />
+  </ItemGroup>
+
+</Project>

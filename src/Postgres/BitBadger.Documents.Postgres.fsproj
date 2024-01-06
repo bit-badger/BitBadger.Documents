@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageReleaseNotes>Initial release; migrated from BitBadger.Npgsql.Documents, with field and extension additions (RC 1)</PackageReleaseNotes>
+    <PackageTags>JSON Document PostgreSQL Npgsql</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Library.fs" />
+    <Compile Include="Extensions.fs" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.FSharp" Version="5.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Common\BitBadger.Documents.Common.fsproj" />
+  </ItemGroup>
+
+</Project>

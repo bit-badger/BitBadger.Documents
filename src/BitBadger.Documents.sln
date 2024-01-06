@@ -1,0 +1,46 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BitBadger.Documents.Common", "Common\BitBadger.Documents.Common.fsproj", "{E52D624A-2A1F-4D38-82B6-115907D9CB1A}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BitBadger.Documents.Tests", "Tests\BitBadger.Documents.Tests.fsproj", "{45D5D503-9FD0-4ADB-ABC6-C8FDAD82B848}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BitBadger.Documents.Sqlite", "Sqlite\BitBadger.Documents.Sqlite.fsproj", "{B8A82483-1E72-46D2-B29A-1C371AC5DD20}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitBadger.Documents.Tests.CSharp", "Tests.CSharp\BitBadger.Documents.Tests.CSharp.csproj", "{AB58418C-7F90-467E-8F67-F4E0AD9D8875}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BitBadger.Documents.Postgres", "Postgres\BitBadger.Documents.Postgres.fsproj", "{30E73486-9D00-440B-B4AC-5B7AC029AE72}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E52D624A-2A1F-4D38-82B6-115907D9CB1A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E52D624A-2A1F-4D38-82B6-115907D9CB1A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E52D624A-2A1F-4D38-82B6-115907D9CB1A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E52D624A-2A1F-4D38-82B6-115907D9CB1A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{45D5D503-9FD0-4ADB-ABC6-C8FDAD82B848}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{45D5D503-9FD0-4ADB-ABC6-C8FDAD82B848}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{45D5D503-9FD0-4ADB-ABC6-C8FDAD82B848}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{45D5D503-9FD0-4ADB-ABC6-C8FDAD82B848}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8A82483-1E72-46D2-B29A-1C371AC5DD20}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8A82483-1E72-46D2-B29A-1C371AC5DD20}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8A82483-1E72-46D2-B29A-1C371AC5DD20}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8A82483-1E72-46D2-B29A-1C371AC5DD20}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB58418C-7F90-467E-8F67-F4E0AD9D8875}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB58418C-7F90-467E-8F67-F4E0AD9D8875}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB58418C-7F90-467E-8F67-F4E0AD9D8875}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB58418C-7F90-467E-8F67-F4E0AD9D8875}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30E73486-9D00-440B-B4AC-5B7AC029AE72}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30E73486-9D00-440B-B4AC-5B7AC029AE72}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30E73486-9D00-440B-B4AC-5B7AC029AE72}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30E73486-9D00-440B-B4AC-5B7AC029AE72}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
