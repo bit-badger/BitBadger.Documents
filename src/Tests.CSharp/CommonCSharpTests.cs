@@ -177,12 +177,12 @@ public static class CommonCSharpTests
             {
                 TestCase("succeeds when a logical operator is passed", () =>
                 {
-                    Expect.equal(Query.WhereByField("theField", Op.GT, "@test"), "data ->> 'theField' > @test",
+                    Expect.equal(Query.WhereByField(Field.GT("theField", 0), "@test"), "data ->> 'theField' > @test",
                         "WHERE clause not correct");
                 }),
                 TestCase("succeeds when an existence operator is passed", () =>
                 {
-                    Expect.equal(Query.WhereByField("thatField", Op.NEX, ""), "data ->> 'thatField' IS NULL",
+                    Expect.equal(Query.WhereByField(Field.NEX("thatField"), ""), "data ->> 'thatField' IS NULL",
                         "WHERE clause not correct");
                 })
             }),
@@ -242,7 +242,7 @@ public static class CommonCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Query.Count.ByField("tbl", "thatField", Op.EQ),
+                    Expect.equal(Query.Count.ByField("tbl", Field.EQ("thatField", 0)),
                         "SELECT COUNT(*) AS it FROM tbl WHERE data ->> 'thatField' = @field",
                         "JSON field text comparison count query not correct");
                 })
@@ -257,7 +257,7 @@ public static class CommonCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Query.Exists.ByField("tbl", "Test", Op.LT),
+                    Expect.equal(Query.Exists.ByField("tbl", Field.LT("Test", 0)),
                         "SELECT EXISTS (SELECT 1 FROM tbl WHERE data ->> 'Test' < @field) AS it",
                         "JSON field text comparison exists query not correct");
                 })
@@ -271,7 +271,7 @@ public static class CommonCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Query.Find.ByField("tbl", "Golf", Op.GE),
+                    Expect.equal(Query.Find.ByField("tbl", Field.GE("Golf", 0)),
                         "SELECT data FROM tbl WHERE data ->> 'Golf' >= @field",
                         "SELECT by JSON comparison query not correct");
                 })
@@ -285,7 +285,7 @@ public static class CommonCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Query.Delete.ByField("tbl", "gone", Op.NEX),
+                    Expect.equal(Query.Delete.ByField("tbl", Field.NEX("gone")),
                         "DELETE FROM tbl WHERE data ->> 'gone' IS NULL",
                         "DELETE by JSON comparison query not correct");
                 })

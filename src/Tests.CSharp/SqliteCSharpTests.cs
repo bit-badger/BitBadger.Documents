@@ -36,7 +36,7 @@ public static class SqliteCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Sqlite.Query.Patch.ByField("tbl", "Part", Op.NE),
+                    Expect.equal(Sqlite.Query.Patch.ByField("tbl", Field.NE("Part", 0)),
                         "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field",
                         "UPDATE partial by JSON comparison query not correct");
                 })
@@ -51,7 +51,7 @@ public static class SqliteCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Sqlite.Query.RemoveField.ByField("tbl", "Fly", Op.LT),
+                    Expect.equal(Sqlite.Query.RemoveField.ByField("tbl", Field.LT("Fly", 0)),
                         "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Fly' < @field",
                         "Remove field by field query not correct");
                 })
@@ -71,11 +71,18 @@ public static class SqliteCSharpTests
                 Expect.equal(theParam.ParameterName, "@test", "The parameter name is incorrect");
                 Expect.equal(theParam.Value, "{\"Nice\":\"job\"}", "The parameter value is incorrect");
             }),
-            TestCase("Field succeeds", () =>
+            TestCase("AddField succeeds when adding a parameter", () =>
             {
-                var theParam = Parameters.Field(99);
+                var paramList = Parameters.AddField(Field.EQ("it", 99), Enumerable.Empty<SqliteParameter>()).ToList();
+                Expect.hasLength(paramList, 1, "There should have been a parameter added");
+                var theParam = paramList[0];
                 Expect.equal(theParam.ParameterName, "@field", "The parameter name is incorrect");
                 Expect.equal(theParam.Value, 99, "The parameter value is incorrect");
+            }),
+            TestCase("AddField succeeds when not adding a parameter", () =>
+            {
+                var paramSeq = Parameters.AddField(Field.EX("Coffee"), Enumerable.Empty<SqliteParameter>());
+                Expect.isEmpty(paramSeq, "There should not have been any parameters added");
             }),
             TestCase("None succeeds", () =>
             {

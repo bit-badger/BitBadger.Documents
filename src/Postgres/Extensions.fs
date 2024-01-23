@@ -50,8 +50,8 @@ module Extensions =
             WithProps.Count.all tableName (Sql.existingConnection conn)
         
         /// Count matching documents using a JSON field comparison query (->> =)
-        member conn.countByField tableName fieldName op (value: obj) =
-            WithProps.Count.byField tableName fieldName op value (Sql.existingConnection conn)
+        member conn.countByField tableName field =
+            WithProps.Count.byField tableName field (Sql.existingConnection conn)
         
         /// Count matching documents using a JSON containment query (@>)
         member conn.countByContains tableName criteria =
@@ -66,8 +66,8 @@ module Extensions =
             WithProps.Exists.byId tableName docId (Sql.existingConnection conn)
         
         /// Determine if documents exist using a JSON field comparison query (->> =)
-        member conn.existsByField tableName fieldName op (value: obj) =
-            WithProps.Exists.byField tableName fieldName op value (Sql.existingConnection conn)
+        member conn.existsByField tableName field =
+            WithProps.Exists.byField tableName field (Sql.existingConnection conn)
         
         /// Determine if documents exist using a JSON containment query (@>)
         member conn.existsByContains tableName criteria =
@@ -86,8 +86,8 @@ module Extensions =
             WithProps.Find.byId<'TKey, 'TDoc> tableName docId (Sql.existingConnection conn)
 
         /// Retrieve documents matching a JSON field comparison query (->> =)
-        member conn.findByField<'TDoc> tableName fieldName op (value: obj) =
-            WithProps.Find.byField<'TDoc> tableName fieldName op value (Sql.existingConnection conn)
+        member conn.findByField<'TDoc> tableName field =
+            WithProps.Find.byField<'TDoc> tableName field (Sql.existingConnection conn)
         
         /// Retrieve documents matching a JSON containment query (@>)
         member conn.findByContains<'TDoc> tableName (criteria: obj) =
@@ -98,8 +98,8 @@ module Extensions =
             WithProps.Find.byJsonPath<'TDoc> tableName jsonPath (Sql.existingConnection conn)
         
         /// Retrieve the first document matching a JSON field comparison query (->> =); returns None if not found
-        member conn.findFirstByField<'TDoc> tableName fieldName op (value: obj) =
-            WithProps.Find.firstByField<'TDoc> tableName fieldName op value (Sql.existingConnection conn)
+        member conn.findFirstByField<'TDoc> tableName field =
+            WithProps.Find.firstByField<'TDoc> tableName field (Sql.existingConnection conn)
         
         /// Retrieve the first document matching a JSON containment query (@>); returns None if not found
         member conn.findFirstByContains<'TDoc> tableName (criteria: obj) =
@@ -122,8 +122,8 @@ module Extensions =
             WithProps.Patch.byId tableName docId patch (Sql.existingConnection conn)
         
         /// Patch documents using a JSON field comparison query in the WHERE clause (->> =)
-        member conn.patchByField tableName fieldName op (value: obj) (patch: 'TPatch) =
-            WithProps.Patch.byField tableName fieldName op value patch (Sql.existingConnection conn)
+        member conn.patchByField tableName field (patch: 'TPatch) =
+            WithProps.Patch.byField tableName field patch (Sql.existingConnection conn)
         
         /// Patch documents using a JSON containment query in the WHERE clause (@>)
         member conn.patchByContains tableName (criteria: 'TCriteria) (patch: 'TPatch) =
@@ -138,8 +138,8 @@ module Extensions =
             WithProps.Delete.byId tableName docId (Sql.existingConnection conn)
 
         /// Delete documents by matching a JSON field comparison query (->> =)
-        member conn.deleteByField tableName fieldName op (value: obj) =
-            WithProps.Delete.byField tableName fieldName op value (Sql.existingConnection conn)
+        member conn.deleteByField tableName field =
+            WithProps.Delete.byField tableName field (Sql.existingConnection conn)
         
         /// Delete documents by matching a JSON containment query (@>)
         member conn.deleteByContains tableName (criteria: 'TContains) =
@@ -209,8 +209,8 @@ type NpgsqlConnectionCSharpExtensions =
     
     /// Count matching documents using a JSON field comparison query (->> =)
     [<Extension>]
-    static member inline CountByField(conn, tableName, fieldName, op, value: obj) =
-        WithProps.Count.byField tableName fieldName op value (Sql.existingConnection conn)
+    static member inline CountByField(conn, tableName, field) =
+        WithProps.Count.byField tableName field (Sql.existingConnection conn)
     
     /// Count matching documents using a JSON containment query (@>)
     [<Extension>]
@@ -229,8 +229,8 @@ type NpgsqlConnectionCSharpExtensions =
     
     /// Determine if documents exist using a JSON field comparison query (->> =)
     [<Extension>]
-    static member inline ExistsByField(conn, tableName, fieldName, op, value: obj) =
-        WithProps.Exists.byField tableName fieldName op value (Sql.existingConnection conn)
+    static member inline ExistsByField(conn, tableName, field) =
+        WithProps.Exists.byField tableName field (Sql.existingConnection conn)
     
     /// Determine if documents exist using a JSON containment query (@>)
     [<Extension>]
@@ -254,8 +254,8 @@ type NpgsqlConnectionCSharpExtensions =
 
     /// Retrieve documents matching a JSON field comparison query (->> =)
     [<Extension>]
-    static member inline FindByField<'TDoc>(conn, tableName, fieldName, op, value: obj) =
-        WithProps.Find.ByField<'TDoc>(tableName, fieldName, op, value, Sql.existingConnection conn)
+    static member inline FindByField<'TDoc>(conn, tableName, field) =
+        WithProps.Find.ByField<'TDoc>(tableName, field, Sql.existingConnection conn)
     
     /// Retrieve documents matching a JSON containment query (@>)
     [<Extension>]
@@ -269,8 +269,8 @@ type NpgsqlConnectionCSharpExtensions =
     
     /// Retrieve the first document matching a JSON field comparison query (->> =); returns None if not found
     [<Extension>]
-    static member inline FindFirstByField<'TDoc when 'TDoc: null>(conn, tableName, fieldName, op, value: obj) =
-        WithProps.Find.FirstByField<'TDoc>(tableName, fieldName, op, value, Sql.existingConnection conn)
+    static member inline FindFirstByField<'TDoc when 'TDoc: null>(conn, tableName, field) =
+        WithProps.Find.FirstByField<'TDoc>(tableName, field, Sql.existingConnection conn)
     
     /// Retrieve the first document matching a JSON containment query (@>); returns None if not found
     [<Extension>]
@@ -299,8 +299,8 @@ type NpgsqlConnectionCSharpExtensions =
     
     /// Patch documents using a JSON field comparison query in the WHERE clause (->> =)
     [<Extension>]
-    static member inline PatchByField(conn, tableName, fieldName, op, value: obj, patch: 'TPatch) =
-        WithProps.Patch.byField tableName fieldName op value patch (Sql.existingConnection conn)
+    static member inline PatchByField(conn, tableName, field, patch: 'TPatch) =
+        WithProps.Patch.byField tableName field patch (Sql.existingConnection conn)
     
     /// Patch documents using a JSON containment query in the WHERE clause (@>)
     [<Extension>]
@@ -319,8 +319,8 @@ type NpgsqlConnectionCSharpExtensions =
 
     /// Delete documents by matching a JSON field comparison query (->> =)
     [<Extension>]
-    static member inline DeleteByField(conn, tableName, fieldName, op, value: obj) =
-        WithProps.Delete.byField tableName fieldName op value (Sql.existingConnection conn)
+    static member inline DeleteByField(conn, tableName, field) =
+        WithProps.Delete.byField tableName field (Sql.existingConnection conn)
     
     /// Delete documents by matching a JSON containment query (@>)
     [<Extension>]

@@ -45,13 +45,13 @@ let all =
             testList "whereByField" [
                 test "succeeds when a logical operator is passed" {
                     Expect.equal
-                        (Query.whereByField "theField" GT "@test")
+                        (Query.whereByField (Field.GT "theField" 0) "@test")
                         "data ->> 'theField' > @test"
                         "WHERE clause not correct"
                 }
                 test "succeeds when an existence operator is passed" {
                     Expect.equal
-                        (Query.whereByField "thatField" NEX "")
+                        (Query.whereByField (Field.NEX "thatField") "")
                         "data ->> 'thatField' IS NULL"
                         "WHERE clause not correct"
                 }
@@ -107,7 +107,7 @@ let all =
                 }
                 test "byField succeeds" {
                     Expect.equal
-                        (Query.Count.byField tbl "thatField" EQ)
+                        (Query.Count.byField tbl (Field.EQ "thatField" 0))
                         $"SELECT COUNT(*) AS it FROM {tbl} WHERE data ->> 'thatField' = @field"
                         "JSON field text comparison count query not correct"
                 }
@@ -121,7 +121,7 @@ let all =
                 }
                 test "byField succeeds" {
                     Expect.equal
-                        (Query.Exists.byField tbl "Test" LT)
+                        (Query.Exists.byField tbl (Field.LT "Test" 0))
                         $"SELECT EXISTS (SELECT 1 FROM {tbl} WHERE data ->> 'Test' < @field) AS it"
                         "JSON field text comparison exists query not correct"
                 }
@@ -135,7 +135,7 @@ let all =
                 }
                 test "byField succeeds" {
                     Expect.equal
-                        (Query.Find.byField tbl "Golf" GE)
+                        (Query.Find.byField tbl (Field.GE "Golf" 0))
                         $"SELECT data FROM {tbl} WHERE data ->> 'Golf' >= @field"
                         "SELECT by JSON comparison query not correct"
                 }
@@ -149,7 +149,7 @@ let all =
                 }
                 test "byField succeeds" {
                     Expect.equal
-                        (Query.Delete.byField tbl "gone" NEX)
+                        (Query.Delete.byField tbl (Field.NEX "gone"))
                         $"DELETE FROM {tbl} WHERE data ->> 'gone' IS NULL"
                         "DELETE by JSON comparison query not correct"
                 }

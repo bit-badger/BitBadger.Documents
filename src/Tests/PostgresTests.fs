@@ -18,15 +18,23 @@ let unitTests =
                     ("@test", Sql.jsonb """{"Something":"good"}""")
                     "JSON parameter not constructed correctly"
             }
-            test "fieldParam succeeds" {
-                let it = fieldParam 242
-                Expect.equal (fst it) "@field" "Field parameter name not correct"
-                match snd it with
-                | SqlValue.Parameter value ->
-                    Expect.equal value.ParameterName "@field" "Parameter name not correct"
-                    Expect.equal value.Value 242 "Parameter value not correct"
-                | _ -> Expect.isTrue false "The parameter was not a Parameter type"
-            }
+            testList "addFieldParam" [
+                test "succeeds when a parameter is added" {
+                    let paramList = addFieldParam (Field.EQ "it" "242") []
+                    Expect.hasLength paramList 1 "There should have been a parameter added"
+                    let it = paramList[0]
+                    Expect.equal (fst it) "@field" "Field parameter name not correct"
+                    match snd it with
+                    | SqlValue.Parameter value ->
+                        Expect.equal value.ParameterName "@field" "Parameter name not correct"
+                        Expect.equal value.Value "242" "Parameter value not correct"
+                    | _ -> Expect.isTrue false "The parameter was not a Parameter type"
+                }
+                test "succeeds when a parameter is not added" {
+                    let paramList = addFieldParam (Field.EX "tacos") []
+                    Expect.isEmpty paramList "There should not have been any parameters added"
+                }
+            ]
             test "noParams succeeds" {
                 Expect.isEmpty noParams "The no-params sequence should be empty"
             }
@@ -110,7 +118,7 @@ let unitTests =
                 }
                 test "byField succeeds" {
                     Expect.equal
-                        (Query.Patch.byField PostgresDb.TableName "Snail" LT)
+                        (Query.Patch.byField PostgresDb.TableName (Field.LT "Snail" 0))
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data ->> 'Snail' < @field"
                         "UPDATE partial by ID statement not correct"
                 }
@@ -357,7 +365,7 @@ let integrationTests =
                 use db = PostgresDb.BuildDb()
                 do! loadDocs ()
                 
-                let! theCount = Count.byField PostgresDb.TableName "Value" EQ "purple"
+                let! theCount = Count.byField PostgresDb.TableName (Field.EQ "Value" "purple")
                 Expect.equal theCount 2 "There should have been 2 matching documents"
             }
             testTask "byContains succeeds" {
@@ -397,14 +405,14 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    let! exists = Exists.byField PostgresDb.TableName "Sub" EX ""
+                    let! exists = Exists.byField PostgresDb.TableName (Field.EX "Sub")
                     Expect.isTrue exists "There should have been existing documents"
                 }
                 testTask "succeeds when documents do not exist" {
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    let! exists = Exists.byField PostgresDb.TableName "NumValue" EQ "six"
+                    let! exists = Exists.byField PostgresDb.TableName (Field.EQ "NumValue" "six")
                     Expect.isFalse exists "There should not have been existing documents"
                 }
             ]
@@ -486,14 +494,14 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    let! docs = Find.byField<JsonDocument> PostgresDb.TableName "Value" EQ "another"
+                    let! docs = Find.byField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "another")
                     Expect.equal (List.length docs) 1 "There should have been one document returned"
                 }
                 testTask "succeeds when documents are not found" {
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    let! docs = Find.byField<JsonDocument> PostgresDb.TableName "Value" EQ "mauve"
+                    let! docs = Find.byField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "mauve")
                     Expect.isEmpty docs "There should have been no documents returned"
                 }
             ]
@@ -534,7 +542,7 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    let! doc = Find.firstByField<JsonDocument> PostgresDb.TableName "Value" EQ "another"
+                    let! doc = Find.firstByField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "another")
                     Expect.isSome doc "There should have been a document returned"
                     Expect.equal doc.Value.Id "two" "The incorrect document was returned"
                 }
@@ -542,7 +550,7 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    let! doc = Find.firstByField<JsonDocument> PostgresDb.TableName "Value" EQ "purple"
+                    let! doc = Find.firstByField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "purple")
                     Expect.isSome doc "There should have been a document returned"
                     Expect.contains [ "five"; "four" ] doc.Value.Id "An incorrect document was returned"
                 }
@@ -550,7 +558,7 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    let! doc = Find.firstByField<JsonDocument> PostgresDb.TableName "Value" EQ "absent"
+                    let! doc = Find.firstByField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "absent")
                     Expect.isNone doc "There should not have been a document returned"
                 }
             ]
@@ -682,8 +690,8 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! Patch.byField PostgresDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
-                    let! after = Count.byField PostgresDb.TableName "NumValue" EQ "77"
+                    do! Patch.byField PostgresDb.TableName (Field.EQ "Value" "purple") {| NumValue = 77 |}
+                    let! after = Count.byField PostgresDb.TableName (Field.EQ "NumValue" "77")
                     Expect.equal after 2 "There should have been 2 documents returned"
                 }
                 testTask "succeeds when no document is updated" {
@@ -693,7 +701,7 @@ let integrationTests =
                     Expect.equal before 0 "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Patch.byField PostgresDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+                    do! Patch.byField PostgresDb.TableName (Field.EQ "Value" "burgundy") {| Foo = "green" |}
                 }
             ]
             testList "byContains" [
@@ -759,7 +767,7 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    do! Delete.byField PostgresDb.TableName "Value" EQ "purple"
+                    do! Delete.byField PostgresDb.TableName (Field.EQ "Value" "purple")
                     let! remaining = Count.all PostgresDb.TableName
                     Expect.equal remaining 3 "There should have been 3 documents remaining"
                 }
@@ -767,7 +775,7 @@ let integrationTests =
                     use db = PostgresDb.BuildDb()
                     do! loadDocs ()
 
-                    do! Delete.byField PostgresDb.TableName "Value" EQ "crimson"
+                    do! Delete.byField PostgresDb.TableName (Field.EQ "Value" "crimson")
                     let! remaining = Count.all PostgresDb.TableName
                     Expect.equal remaining 5 "There should have been 5 documents remaining"
                 }

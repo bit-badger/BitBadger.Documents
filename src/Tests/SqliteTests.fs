@@ -27,7 +27,7 @@ let unitTests =
                 }
                 test "byField succeeds" {
                     Expect.equal
-                        (Query.Patch.byField "tbl" "Part" NE)
+                        (Query.Patch.byField "tbl" (Field.NE "Part" 0))
                         "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field"
                         "UPDATE partial by JSON comparison query not correct"
                 }
@@ -41,7 +41,7 @@ let unitTests =
                 }
                 test "byField succeeds" {
                     Expect.equal
-                        (Query.RemoveField.byField "tbl" "Fly" GT)
+                        (Query.RemoveField.byField "tbl" (Field.GT "Fly" 0))
                         "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Fly' > @field"
                         "Remove field by field query not correct"
                 }
@@ -58,11 +58,19 @@ let unitTests =
                 Expect.equal theParam.ParameterName "@test" "The parameter name is incorrect"
                 Expect.equal theParam.Value """{"Nice":"job"}""" "The parameter value is incorrect"
             }
-            test "fieldParam succeeds" {
-                let theParam = fieldParam 99
-                Expect.equal theParam.ParameterName "@field" "The parameter name is incorrect"
-                Expect.equal theParam.Value 99 "The parameter value is incorrect"
-            }
+            testList "addFieldParam" [
+                test "succeeds when adding a parameter" {
+                    let paramList = addFieldParam (Field.EQ "it" 99) []
+                    Expect.hasLength paramList 1 "There should have been a parameter added"
+                    let theParam = paramList[0]
+                    Expect.equal theParam.ParameterName "@field" "The parameter name is incorrect"
+                    Expect.equal theParam.Value 99 "The parameter value is incorrect"
+                }
+                test "succeeds when not adding a parameter" {
+                    let paramList = addFieldParam (Field.NEX "Coffee") []
+                    Expect.isEmpty paramList "There should not have been any parameters added"
+                }
+            ]
             test "noParams succeeds" {
                 Expect.isEmpty noParams "The parameter list should have been empty"
             }

@@ -64,9 +64,18 @@ module Parameters =
         name, Sql.jsonb (Configuration.serializer().Serialize it)
 
     /// Create a JSON field parameter (name "@field")
-    [<CompiledName "Field">]
-    let fieldParam (value: obj) =
-        "@field", Sql.parameter (NpgsqlParameter("@field", value))
+    [<CompiledName "FSharpAddField">]
+    let addFieldParam field parameters =
+        match field.Op with
+        | EX | NEX -> parameters
+        | _ -> ("@field", Sql.parameter (NpgsqlParameter("@field", field.Value))) :: parameters
+
+    /// Create a JSON field parameter (name "@field")
+    let AddField field parameters =
+        match field.Op with
+        | EX | NEX -> parameters
+        | _ ->
+            ("@field", Sql.parameter (NpgsqlParameter("@field", field.Value))) |> Seq.singleton |> Seq.append parameters
 
     /// An empty parameter sequence
     [<CompiledName "None">]
@@ -152,8 +161,8 @@ module Query =
         
         /// Query to patch documents match a JSON field comparison (->> =)
         [<CompiledName "ByField">]
-        let byField tableName fieldName op =
-            $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereByField fieldName op "@field"}"""
+        let byField tableName field =
+            $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereByField field "@field"}"""
         
         /// Query to patch documents matching a JSON containment query (@>)
         [<CompiledName "ByContains">]
@@ -302,8 +311,8 @@ module WithProps =
         
         /// Count matching documents using a JSON field comparison (->> =)
         [<CompiledName "ByField">]
-        let byField tableName fieldName op (value: obj) sqlProps =
-            Custom.scalar (Query.Count.byField tableName fieldName op) [ fieldParam value ] toCount sqlProps
+        let byField tableName field sqlProps =
+            Custom.scalar (Query.Count.byField tableName field) (addFieldParam field []) toCount sqlProps
         
         /// Count matching documents using a JSON containment query (@>)
         [<CompiledName "ByContains">]
@@ -326,8 +335,8 @@ module WithProps =
 
         /// Determine if a document exists using a JSON field comparison (->> =)
         [<CompiledName "ByField">]
-        let byField tableName fieldName op (value: obj) sqlProps =
-            Custom.scalar (Query.Exists.byField tableName fieldName op) [ fieldParam value ] toExists sqlProps
+        let byField tableName field sqlProps =
+            Custom.scalar (Query.Exists.byField tableName field) (addFieldParam field []) toExists sqlProps
         
         /// Determine if a document exists using a JSON containment query (@>)
         [<CompiledName "ByContains">]
@@ -363,13 +372,12 @@ module WithProps =
 
         /// Retrieve documents matching a JSON field comparison (->> =)
         [<CompiledName "FSharpByField">]
-        let byField<'TDoc> tableName fieldName op (value: obj) sqlProps =
-            Custom.list<'TDoc> (Query.Find.byField tableName fieldName op) [ fieldParam value ] fromData<'TDoc> sqlProps
+        let byField<'TDoc> tableName field sqlProps =
+            Custom.list<'TDoc> (Query.Find.byField tableName field) (addFieldParam field []) fromData<'TDoc> sqlProps
         
         /// Retrieve documents matching a JSON field comparison (->> =)
-        let ByField<'TDoc>(tableName, fieldName, op, value: obj, sqlProps) =
-            Custom.List<'TDoc>(
-                Query.Find.byField tableName fieldName op, [ fieldParam value ], fromData<'TDoc>, sqlProps)
+        let ByField<'TDoc>(tableName, field, sqlProps) =
+            Custom.List<'TDoc>(Query.Find.byField tableName field, addFieldParam field [], fromData<'TDoc>, sqlProps)
         
         /// Retrieve documents matching a JSON containment query (@>)
         [<CompiledName "FSharpByContains">]
@@ -395,14 +403,14 @@ module WithProps =
         
         /// Retrieve the first document matching a JSON field comparison (->> =); returns None if not found
         [<CompiledName "FSharpFirstByField">]
-        let firstByField<'TDoc> tableName fieldName op (value: obj) sqlProps =
+        let firstByField<'TDoc> tableName field sqlProps =
             Custom.single<'TDoc>
-                $"{Query.Find.byField tableName fieldName op} LIMIT 1" [ fieldParam value ] fromData<'TDoc> sqlProps
+                $"{Query.Find.byField tableName field} LIMIT 1" (addFieldParam field []) fromData<'TDoc> sqlProps
             
         /// Retrieve the first document matching a JSON field comparison (->> =); returns null if not found
-        let FirstByField<'TDoc when 'TDoc: null>(tableName, fieldName, op, value: obj, sqlProps) =
+        let FirstByField<'TDoc when 'TDoc: null>(tableName, field, sqlProps) =
             Custom.Single<'TDoc>(
-                $"{Query.Find.byField tableName fieldName op} LIMIT 1", [ fieldParam value ], fromData<'TDoc>, sqlProps)
+                $"{Query.Find.byField tableName field} LIMIT 1", addFieldParam field [], fromData<'TDoc>, sqlProps)
             
         /// Retrieve the first document matching a JSON containment query (@>); returns None if not found
         [<CompiledName "FSharpFirstByContains">]
@@ -461,9 +469,9 @@ module WithProps =
         
         /// Patch documents using a JSON field comparison query in the WHERE clause (->> =)
         [<CompiledName "ByField">]
-        let byField tableName fieldName op (value: obj) (patch: 'TPatch) sqlProps =
+        let byField tableName field (patch: 'TPatch) sqlProps =
             Custom.nonQuery
-                (Query.Patch.byField tableName fieldName op) [ jsonParam "@data" patch; fieldParam value ] sqlProps
+                (Query.Patch.byField tableName field) (addFieldParam field [ jsonParam "@data" patch ]) sqlProps
         
         /// Patch documents using a JSON containment query in the WHERE clause (@>)
         [<CompiledName "ByContains">]
@@ -488,8 +496,8 @@ module WithProps =
 
         /// Delete documents by matching a JSON field comparison query (->> =)
         [<CompiledName "ByField">]
-        let byField tableName fieldName op (value: obj) sqlProps =
-            Custom.nonQuery (Query.Delete.byField tableName fieldName op) [ fieldParam value ] sqlProps
+        let byField tableName field sqlProps =
+            Custom.nonQuery (Query.Delete.byField tableName field) (addFieldParam field []) sqlProps
         
         /// Delete documents by matching a JSON contains query (@>)
         [<CompiledName "ByContains">]
@@ -585,8 +593,8 @@ module Count =
     
     /// Count matching documents using a JSON field comparison query (->> =)
     [<CompiledName "ByField">]
-    let byField tableName fieldName op (value: obj) =
-        WithProps.Count.byField tableName fieldName op value (fromDataSource ())
+    let byField tableName field =
+        WithProps.Count.byField tableName field (fromDataSource ())
     
     /// Count matching documents using a JSON containment query (@>)
     [<CompiledName "ByContains">]
@@ -610,8 +618,8 @@ module Exists =
     
     /// Determine if documents exist using a JSON field comparison query (->> =)
     [<CompiledName "ByField">]
-    let byField tableName fieldName op (value: obj) =
-        WithProps.Exists.byField tableName fieldName op value (fromDataSource ())
+    let byField tableName field =
+        WithProps.Exists.byField tableName field (fromDataSource ())
     
     /// Determine if documents exist using a JSON containment query (@>)
     [<CompiledName "ByContains">]
@@ -648,12 +656,12 @@ module Find =
 
     /// Retrieve documents matching a JSON field comparison query (->> =)
     [<CompiledName "FSharpByField">]
-    let byField<'TDoc> tableName fieldName op (value: obj) =
-        WithProps.Find.byField<'TDoc> tableName fieldName op value (fromDataSource ())
+    let byField<'TDoc> tableName field =
+        WithProps.Find.byField<'TDoc> tableName field (fromDataSource ())
     
     /// Retrieve documents matching a JSON field comparison query (->> =)
-    let ByField<'TDoc>(tableName, fieldName, op, value: obj) =
-        WithProps.Find.ByField<'TDoc>(tableName, fieldName, op, value, fromDataSource ())
+    let ByField<'TDoc>(tableName, field) =
+        WithProps.Find.ByField<'TDoc>(tableName, field, fromDataSource ())
     
     /// Retrieve documents matching a JSON containment query (@>)
     [<CompiledName "FSharpByContains">]
@@ -675,12 +683,12 @@ module Find =
     
     /// Retrieve the first document matching a JSON field comparison query (->> =); returns None if not found
     [<CompiledName "FSharpFirstByField">]
-    let firstByField<'TDoc> tableName fieldName op (value: obj) =
-        WithProps.Find.firstByField<'TDoc> tableName fieldName op value (fromDataSource ())
+    let firstByField<'TDoc> tableName field =
+        WithProps.Find.firstByField<'TDoc> tableName field (fromDataSource ())
     
     /// Retrieve the first document matching a JSON field comparison query (->> =); returns null if not found
-    let FirstByField<'TDoc when 'TDoc: null>(tableName, fieldName, op, value: obj) =
-        WithProps.Find.FirstByField<'TDoc>(tableName, fieldName, op, value, fromDataSource ())
+    let FirstByField<'TDoc when 'TDoc: null>(tableName, field) =
+        WithProps.Find.FirstByField<'TDoc>(tableName, field, fromDataSource ())
     
     /// Retrieve the first document matching a JSON containment query (@>); returns None if not found
     [<CompiledName "FSharpFirstByContains">]
@@ -731,8 +739,8 @@ module Patch =
     
     /// Patch documents using a JSON field comparison query in the WHERE clause (->> =)
     [<CompiledName "ByField">]
-    let byField tableName fieldName op (value: obj) (patch: 'TPatch) =
-        WithProps.Patch.byField tableName fieldName op value patch (fromDataSource ())
+    let byField tableName field (patch: 'TPatch) =
+        WithProps.Patch.byField tableName field patch (fromDataSource ())
     
     /// Patch documents using a JSON containment query in the WHERE clause (@>)
     [<CompiledName "ByContains">]
@@ -756,8 +764,8 @@ module Delete =
 
     /// Delete documents by matching a JSON field comparison query (->> =)
     [<CompiledName "ByField">]
-    let byField tableName fieldName op (value: obj) =
-        WithProps.Delete.byField tableName fieldName op value (fromDataSource ())
+    let byField tableName field =
+        WithProps.Delete.byField tableName field (fromDataSource ())
     
     /// Delete documents by matching a JSON containment query (@>)
     [<CompiledName "ByContains">]
