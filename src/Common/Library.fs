@@ -32,6 +32,51 @@ type Op =
         | NEX -> "IS NULL"
 
 
+/// Criteria for a field WHERE clause
+type Field = {
+    /// The name of the field
+    Name: string
+    
+    /// The operation by which the field will be compared
+    Op: Op
+    
+    /// The value of the field
+    Value: obj
+} with
+    
+    /// Create an equals (=) field criteria
+    static member EQ name (value: obj) =
+        { Name = name; Op = EQ; Value = value }
+    
+    /// Create a greater than (>) field criteria
+    static member GT name (value: obj) =
+        { Name = name; Op = GT; Value = value }
+    
+    /// Create a greater than or equal to (>=) field criteria
+    static member GE name (value: obj) =
+        { Name = name; Op = GE; Value = value }
+    
+    /// Create a less than (<) field criteria
+    static member LT name (value: obj) =
+        { Name = name; Op = LT; Value = value }
+    
+    /// Create a less than or equal to (<=) field criteria
+    static member LE name (value: obj) =
+        { Name = name; Op = LE; Value = value }
+    
+    /// Create a not equals (<>) field criteria
+    static member NE name (value: obj) =
+        { Name = name; Op = NE; Value = value }
+    
+    /// Create an exists (IS NOT NULL) field criteria
+    static member EX name =
+        { Name = name; Op = EX; Value = obj () }
+    
+    /// Create an not exists (IS NULL) field criteria
+    static member NEX name =
+        { Name = name; Op = NEX; Value = obj () }
+
+
 /// The required document serialization implementation
 type IDocumentSerializer =
     

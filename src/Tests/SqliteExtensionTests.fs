@@ -118,7 +118,7 @@ let integrationTests =
             use  conn = Configuration.dbConn ()
             do! loadDocs ()
     
-            let! theCount = conn.countByField SqliteDb.TableName "Value" EQ "purple"
+            let! theCount = conn.countByField SqliteDb.TableName (Field.EQ "Value" "purple")
             Expect.equal theCount 2L "There should have been 2 matching documents"
         }
         testList "existsById" [
@@ -145,7 +145,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                let! exists = conn.existsByField SqliteDb.TableName "NumValue" EQ 10
+                let! exists = conn.existsByField SqliteDb.TableName (Field.EQ "NumValue" 10)
                 Expect.isTrue exists "There should have been existing documents"
             }
             testTask "succeeds when no matching documents exist" {
@@ -153,7 +153,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                let! exists = conn.existsByField SqliteDb.TableName "Nothing" EQ "none"
+                let! exists = conn.existsByField SqliteDb.TableName (Field.EQ "Nothing" "none")
                 Expect.isFalse exists "There should not have been any existing documents"
             }
         ]
@@ -206,7 +206,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                let! docs = conn.findByField<JsonDocument> SqliteDb.TableName "Sub.Foo" EQ "green"
+                let! docs = conn.findByField<JsonDocument> SqliteDb.TableName (Field.EQ "Sub.Foo" "green")
                 Expect.equal (List.length docs) 2 "There should have been two documents returned"
             }
             testTask "succeeds when documents are not found" {
@@ -214,7 +214,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                let! docs = conn.findByField<JsonDocument> SqliteDb.TableName "Value" EQ "mauve"
+                let! docs = conn.findByField<JsonDocument> SqliteDb.TableName (Field.EQ "Value" "mauve")
                 Expect.isTrue (List.isEmpty docs) "There should have been no documents returned"
             }
         ]
@@ -224,7 +224,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                let! doc = conn.findFirstByField<JsonDocument> SqliteDb.TableName "Value" EQ "another"
+                let! doc = conn.findFirstByField<JsonDocument> SqliteDb.TableName (Field.EQ "Value" "another")
                 Expect.isTrue (Option.isSome doc) "There should have been a document returned"
                 Expect.equal doc.Value.Id "two" "The incorrect document was returned"
             }
@@ -233,7 +233,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                let! doc = conn.findFirstByField<JsonDocument> SqliteDb.TableName "Sub.Foo" EQ "green"
+                let! doc = conn.findFirstByField<JsonDocument> SqliteDb.TableName (Field.EQ "Sub.Foo" "green")
                 Expect.isTrue (Option.isSome doc) "There should have been a document returned"
                 Expect.contains [ "two"; "four" ] doc.Value.Id "An incorrect document was returned"
             }
@@ -242,7 +242,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                let! doc = conn.findFirstByField<JsonDocument> SqliteDb.TableName "Value" EQ "absent"
+                let! doc = conn.findFirstByField<JsonDocument> SqliteDb.TableName (Field.EQ "Value" "absent")
                 Expect.isFalse (Option.isSome doc) "There should not have been a document returned"
             }
         ]
@@ -330,8 +330,8 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
                 
-                do! conn.patchByField SqliteDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
-                let! after = conn.countByField SqliteDb.TableName "NumValue" EQ 77
+                do! conn.patchByField SqliteDb.TableName (Field.EQ "Value" "purple") {| NumValue = 77 |}
+                let! after = conn.countByField SqliteDb.TableName (Field.EQ "NumValue" 77)
                 Expect.equal after 2L "There should have been 2 documents returned"
             }
             testTask "succeeds when no document is updated" {
@@ -342,7 +342,7 @@ let integrationTests =
                 Expect.isEmpty before "There should have been no documents returned"
                 
                 // This not raising an exception is the test
-                do! conn.patchByField SqliteDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+                do! conn.patchByField SqliteDb.TableName (Field.EQ "Value" "burgundy") {| Foo = "green" |}
             }
         ]
         testList "removeFieldById" [
@@ -381,7 +381,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
                 
-                do! conn.removeFieldByField SqliteDb.TableName "NumValue" EQ 17 "Sub"
+                do! conn.removeFieldByField SqliteDb.TableName (Field.EQ "NumValue" 17) "Sub"
                 try
                     let! _ = conn.findById<string, JsonDocument> SqliteDb.TableName "four"
                     Expect.isTrue false "The updated document should have failed to parse"
@@ -395,14 +395,14 @@ let integrationTests =
                 do! loadDocs ()
                 
                 // This not raising an exception is the test
-                do! conn.removeFieldByField SqliteDb.TableName "NumValue" EQ 17 "Nothing"
+                do! conn.removeFieldByField SqliteDb.TableName (Field.EQ "NumValue" 17) "Nothing"
             }
             testTask "succeeds when no document is matched" {
                 use! db   = SqliteDb.BuildDb()
                 use  conn = Configuration.dbConn ()
                 
                 // This not raising an exception is the test
-                do! conn.removeFieldByField SqliteDb.TableName "Abracadabra" NE "apple" "Value"
+                do! conn.removeFieldByField SqliteDb.TableName (Field.NE "Abracadabra" "apple") "Value"
             }
         ]
         testList "deleteById" [
@@ -431,7 +431,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                do! conn.deleteByField SqliteDb.TableName "Value" NE "purple"
+                do! conn.deleteByField SqliteDb.TableName (Field.NE "Value" "purple")
                 let! remaining = conn.countAll SqliteDb.TableName
                 Expect.equal remaining 2L "There should have been 2 documents remaining"
             }
@@ -440,7 +440,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
     
-                do! conn.deleteByField SqliteDb.TableName "Value" EQ "crimson"
+                do! conn.deleteByField SqliteDb.TableName (Field.EQ "Value" "crimson")
                 let! remaining = conn.countAll SqliteDb.TableName
                 Expect.equal remaining 5L "There should have been 5 documents remaining"
             }

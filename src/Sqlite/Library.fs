@@ -12,7 +12,7 @@ module Configuration =
     /// Register a connection string to use for query execution (enables foreign keys)
     [<CompiledName "UseConnectionString">]
     let useConnectionString connStr =
-        let builder = SqliteConnectionStringBuilder(connStr)
+        let builder = SqliteConnectionStringBuilder connStr
         builder.ForeignKeys <- Option.toNullable (Some true)
         connectionString <- Some (string builder)
     
@@ -243,8 +243,8 @@ module WithConn =
         
         /// Count matching documents using a comparison on a JSON field
         [<CompiledName "ByField">]
-        let byField tableName fieldName op (value: obj) conn =
-            Custom.scalar (Query.Count.byField tableName fieldName op) [  fieldParam value ] toCount conn
+        let byField tableName field conn =
+            Custom.scalar (Query.Count.byField tableName field.Name field.Op) [  fieldParam field.Value ] toCount conn
 
     /// Commands to determine if documents exist
     [<RequireQualifiedAccess>]
@@ -257,8 +257,8 @@ module WithConn =
 
         /// Determine if a document exists using a comparison on a JSON field
         [<CompiledName "ByField">]
-        let byField tableName fieldName op (value: obj) conn =
-            Custom.scalar (Query.Exists.byField tableName fieldName op) [ fieldParam value ] toExists conn
+        let byField tableName field conn =
+            Custom.scalar (Query.Exists.byField tableName field.Name field.Op) [ fieldParam field.Value ] toExists conn
     
     /// Commands to retrieve documents
     [<RequireQualifiedAccess>]
@@ -284,23 +284,31 @@ module WithConn =
 
         /// Retrieve documents via a comparison on a JSON field
         [<CompiledName "FSharpByField">]
-        let byField<'TDoc> tableName fieldName op (value: obj) conn =
-            Custom.list<'TDoc> (Query.Find.byField tableName fieldName op) [ fieldParam value ] fromData<'TDoc> conn 
+        let byField<'TDoc> tableName field conn =
+            Custom.list<'TDoc>
+                (Query.Find.byField tableName field.Name field.Op) [ fieldParam field.Value ] fromData<'TDoc> conn 
         
         /// Retrieve documents via a comparison on a JSON field
-        let ByField<'TDoc>(tableName, fieldName, op, value: obj, conn) =
-            Custom.List<'TDoc>(Query.Find.byField tableName fieldName op, [ fieldParam value ], fromData<'TDoc>, conn) 
+        let ByField<'TDoc>(tableName, field, conn) =
+            Custom.List<'TDoc>(
+                Query.Find.byField tableName field.Name field.Op, [ fieldParam field.Value ], fromData<'TDoc>, conn) 
         
         /// Retrieve documents via a comparison on a JSON field, returning only the first result
         [<CompiledName "FSharpFirstByField">]
-        let firstByField<'TDoc> tableName fieldName op (value: obj) conn =
+        let firstByField<'TDoc> tableName field conn =
             Custom.single
-                $"{Query.Find.byField tableName fieldName op} LIMIT 1" [ fieldParam value ] fromData<'TDoc> conn
+                $"{Query.Find.byField tableName field.Name field.Op} LIMIT 1"
+                [ fieldParam field.Value ]
+                fromData<'TDoc>
+                conn
         
         /// Retrieve documents via a comparison on a JSON field, returning only the first result
-        let FirstByField<'TDoc when 'TDoc: null>(tableName, fieldName, op, value: obj, conn) =
+        let FirstByField<'TDoc when 'TDoc: null>(tableName, field, conn) =
             Custom.Single(
-                $"{Query.Find.byField tableName fieldName op} LIMIT 1", [ fieldParam value ], fromData<'TDoc>, conn)
+                $"{Query.Find.byField tableName field.Name field.Op} LIMIT 1",
+                [ fieldParam field.Value ],
+                fromData<'TDoc>,
+                conn)
     
     /// Commands to update documents
     [<RequireQualifiedAccess>]
@@ -331,9 +339,11 @@ module WithConn =
         
         /// Patch documents using a comparison on a JSON field
         [<CompiledName "ByField">]
-        let byField tableName fieldName op (value: obj) (patch: 'TPatch) (conn: SqliteConnection) =
+        let byField tableName field (patch: 'TPatch) (conn: SqliteConnection) =
             Custom.nonQuery
-                (Query.Patch.byField tableName fieldName op) [ fieldParam value; jsonParam "@data" patch ] conn
+                (Query.Patch.byField tableName field.Name field.Op)
+                [ fieldParam field.Value; jsonParam "@data" patch ]
+                conn
 
     /// Commands to remove fields from documents
     [<RequireQualifiedAccess>]
@@ -346,10 +356,10 @@ module WithConn =
         
         /// Remove a field from a document via a comparison on a JSON field in the document
         [<CompiledName "ByField">]
-        let byField tableName whereFieldName op (value: obj) removeFieldName conn =
+        let byField tableName field fieldName conn =
             Custom.nonQuery
-                (Query.RemoveField.byField tableName whereFieldName op)
-                [ fieldParam value; fieldNameParam removeFieldName ]
+                (Query.RemoveField.byField tableName field.Name field.Op)
+                [ fieldParam field.Value; fieldNameParam fieldName ]
                 conn
         
     /// Commands to delete documents
@@ -363,8 +373,8 @@ module WithConn =
 
         /// Delete documents by matching a comparison on a JSON field
         [<CompiledName "ByField">]
-        let byField tableName fieldName op (value: obj) conn =
-            Custom.nonQuery (Query.Delete.byField tableName fieldName op) [ fieldParam value ] conn
+        let byField tableName field conn =
+            Custom.nonQuery (Query.Delete.byField tableName field.Name field.Op) [ fieldParam field.Value ] conn
 
 
 /// Commands to execute custom SQL queries
@@ -454,9 +464,9 @@ module Count =
     
     /// Count matching documents using a comparison on a JSON field
     [<CompiledName "ByField">]
-    let byField tableName fieldName op (value: obj) =
+    let byField tableName field =
         use conn = Configuration.dbConn ()
-        WithConn.Count.byField tableName fieldName op value conn
+        WithConn.Count.byField tableName field conn
 
 /// Commands to determine if documents exist
 [<RequireQualifiedAccess>]
@@ -470,9 +480,9 @@ module Exists =
 
     /// Determine if a document exists using a comparison on a JSON field
     [<CompiledName "ByField">]
-    let byField tableName fieldName op (value: obj) =
+    let byField tableName field =
         use conn = Configuration.dbConn ()
-        WithConn.Exists.byField tableName fieldName op value conn
+        WithConn.Exists.byField tableName field conn
 
 /// Commands to determine if documents exist
 [<RequireQualifiedAccess>]
@@ -502,25 +512,25 @@ module Find =
 
     /// Retrieve documents via a comparison on a JSON field
     [<CompiledName "FSharpByField">]
-    let byField<'TDoc> tableName fieldName op value =
+    let byField<'TDoc> tableName field =
         use conn = Configuration.dbConn ()
-        WithConn.Find.byField<'TDoc> tableName fieldName op value conn
+        WithConn.Find.byField<'TDoc> tableName field conn
 
     /// Retrieve documents via a comparison on a JSON field
-    let ByField<'TDoc>(tableName, fieldName, op, value) =
+    let ByField<'TDoc>(tableName, field) =
         use conn = Configuration.dbConn ()
-        WithConn.Find.ByField<'TDoc>(tableName, fieldName, op, value, conn)
+        WithConn.Find.ByField<'TDoc>(tableName, field, conn)
 
     /// Retrieve documents via a comparison on a JSON field, returning only the first result
     [<CompiledName "FSharpFirstByField">]
-    let firstByField<'TDoc> tableName fieldName op value =
+    let firstByField<'TDoc> tableName field =
         use conn = Configuration.dbConn ()
-        WithConn.Find.firstByField<'TDoc> tableName fieldName op value conn
+        WithConn.Find.firstByField<'TDoc> tableName field conn
 
     /// Retrieve documents via a comparison on a JSON field, returning only the first result
-    let FirstByField<'TDoc when 'TDoc: null>(tableName, fieldName, op, value) =
+    let FirstByField<'TDoc when 'TDoc: null>(tableName, field) =
         use conn = Configuration.dbConn ()
-        WithConn.Find.FirstByField<'TDoc>(tableName, fieldName, op, value, conn)
+        WithConn.Find.FirstByField<'TDoc>(tableName, field, conn)
 
 /// Commands to update documents
 [<RequireQualifiedAccess>]
@@ -555,9 +565,9 @@ module Patch =
     
     /// Patch documents using a comparison on a JSON field in the WHERE clause
     [<CompiledName "ByField">]
-    let byField tableName fieldName op (value: obj) (patch: 'TPatch) =
+    let byField tableName field (patch: 'TPatch) =
         use conn = Configuration.dbConn ()
-        WithConn.Patch.byField tableName fieldName op value patch conn
+        WithConn.Patch.byField tableName field patch conn
 
 /// Commands to remove fields from documents
 [<RequireQualifiedAccess>]
@@ -571,9 +581,9 @@ module RemoveField =
         
     /// Remove a field from a document via a comparison on a JSON field in the document
     [<CompiledName "ByField">]
-    let byField tableName whereFieldName op (value: obj) removeFieldName =
+    let byField tableName field fieldName =
         use conn = Configuration.dbConn ()
-        WithConn.RemoveField.byField tableName whereFieldName op value removeFieldName conn
+        WithConn.RemoveField.byField tableName field fieldName conn
 
 /// Commands to delete documents
 [<RequireQualifiedAccess>]
@@ -587,6 +597,6 @@ module Delete =
 
     /// Delete documents by matching a comparison on a JSON field
     [<CompiledName "ByField">]
-    let byField tableName fieldName op (value: obj) =
+    let byField tableName field =
         use conn = Configuration.dbConn ()
-        WithConn.Delete.byField tableName fieldName op value conn
+        WithConn.Delete.byField tableName field conn

@@ -292,7 +292,7 @@ let integrationTests =
                 use! db = SqliteDb.BuildDb()
                 do! loadDocs ()
         
-                let! theCount = Count.byField SqliteDb.TableName "Value" EQ "purple"
+                let! theCount = Count.byField SqliteDb.TableName (Field.EQ "Value" "purple")
                 Expect.equal theCount 2L "There should have been 2 matching documents"
             }
         ]
@@ -318,14 +318,14 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! exists = Exists.byField SqliteDb.TableName "NumValue" EQ 10
+                    let! exists = Exists.byField SqliteDb.TableName (Field.EQ "NumValue" 10)
                     Expect.isTrue exists "There should have been existing documents"
                 }
                 testTask "succeeds when no matching documents exist" {
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! exists = Exists.byField SqliteDb.TableName "Nothing" LT "none"
+                    let! exists = Exists.byField SqliteDb.TableName (Field.LT "Nothing" "none")
                     Expect.isFalse exists "There should not have been any existing documents"
                 }
             ]
@@ -375,14 +375,14 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! docs = Find.byField<JsonDocument> SqliteDb.TableName "NumValue" GT 15
+                    let! docs = Find.byField<JsonDocument> SqliteDb.TableName (Field.GT "NumValue" 15)
                     Expect.equal (List.length docs) 2 "There should have been two documents returned"
                 }
                 testTask "succeeds when documents are not found" {
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! docs = Find.byField<JsonDocument> SqliteDb.TableName "NumValue" GT 100
+                    let! docs = Find.byField<JsonDocument> SqliteDb.TableName (Field.GT "NumValue" 100)
                     Expect.isTrue (List.isEmpty docs) "There should have been no documents returned"
                 }
             ]
@@ -391,7 +391,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName "Value" EQ "another"
+                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName (Field.EQ "Value" "another")
                     Expect.isTrue (Option.isSome doc) "There should have been a document returned"
                     Expect.equal doc.Value.Id "two" "The incorrect document was returned"
                 }
@@ -399,7 +399,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName "Sub.Foo" EQ "green"
+                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName (Field.EQ "Sub.Foo" "green")
                     Expect.isTrue (Option.isSome doc) "There should have been a document returned"
                     Expect.contains [ "two"; "four" ] doc.Value.Id "An incorrect document was returned"
                 }
@@ -407,7 +407,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName "Value" EQ "absent"
+                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName (Field.EQ "Value" "absent")
                     Expect.isFalse (Option.isSome doc) "There should not have been a document returned"
                 }
             ]
@@ -489,8 +489,8 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! Patch.byField SqliteDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
-                    let! after = Count.byField SqliteDb.TableName "NumValue" EQ 77
+                    do! Patch.byField SqliteDb.TableName (Field.EQ "Value" "purple") {| NumValue = 77 |}
+                    let! after = Count.byField SqliteDb.TableName (Field.EQ "NumValue" 77)
                     Expect.equal after 2L "There should have been 2 documents returned"
                 }
                 testTask "succeeds when no document is updated" {
@@ -500,7 +500,7 @@ let integrationTests =
                     Expect.isEmpty before "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Patch.byField SqliteDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+                    do! Patch.byField SqliteDb.TableName (Field.EQ "Value" "burgundy") {| Foo = "green" |}
                 }
             ]
         ]
@@ -537,7 +537,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! RemoveField.byField SqliteDb.TableName "NumValue" EQ 17 "Sub"
+                    do! RemoveField.byField SqliteDb.TableName (Field.EQ "NumValue" 17) "Sub"
                     try
                         let! _ = Find.byId<string, JsonDocument> SqliteDb.TableName "four"
                         Expect.isTrue false "The updated document should have failed to parse"
@@ -550,13 +550,13 @@ let integrationTests =
                     do! loadDocs ()
                     
                     // This not raising an exception is the test
-                    do! RemoveField.byField SqliteDb.TableName "NumValue" EQ 17 "Nothing"
+                    do! RemoveField.byField SqliteDb.TableName (Field.EQ "NumValue" 17) "Nothing"
                 }
                 testTask "succeeds when no document is matched" {
                     use! db = SqliteDb.BuildDb()
                     
                     // This not raising an exception is the test
-                    do! RemoveField.byField SqliteDb.TableName "Abracadabra" NE "apple" "Value"
+                    do! RemoveField.byField SqliteDb.TableName (Field.NE "Abracadabra" "apple") "Value"
                 }
             ]
         ]
@@ -584,7 +584,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    do! Delete.byField SqliteDb.TableName "Value" NE "purple"
+                    do! Delete.byField SqliteDb.TableName (Field.NE "Value" "purple")
                     let! remaining = Count.all SqliteDb.TableName
                     Expect.equal remaining 2L "There should have been 2 documents remaining"
                 }
@@ -592,7 +592,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    do! Delete.byField SqliteDb.TableName "Value" EQ "crimson"
+                    do! Delete.byField SqliteDb.TableName (Field.EQ "Value" "crimson")
                     let! remaining = Count.all SqliteDb.TableName
                     Expect.equal remaining 5L "There should have been 5 documents remaining"
                 }
