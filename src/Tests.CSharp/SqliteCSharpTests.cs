@@ -585,6 +585,34 @@ public static class SqliteCSharpTests
                     // This not raising an exception is the test
                     await RemoveField.ById(SqliteDb.TableName, "two", "Value");
                 })
+            }),
+            TestList("ByField", new[]
+            {
+                TestCase("succeeds when a field is removed", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveField.ByField(SqliteDb.TableName, "NumValue", Op.EQ, 17, "Sub");
+                    var updated = await Find.ById<string, JsonDocument>(SqliteDb.TableName, "four");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a field is not removed", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    await LoadDocs();
+                        
+                    // This not raising an exception is the test
+                    await RemoveField.ByField(SqliteDb.TableName, "NumValue", Op.EQ, 17, "Nothing");
+                }),
+                TestCase("succeeds when no document is matched", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    
+                    // This not raising an exception is the test
+                    await RemoveField.ByField(SqliteDb.TableName, "Abracadabra", Op.NE, "apple", "Value");
+                })
             })
         }),
         TestList("Delete", new[]

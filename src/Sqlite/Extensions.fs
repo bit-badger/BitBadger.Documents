@@ -88,6 +88,14 @@ module Extensions =
         member conn.patchByField tableName fieldName op (value: obj) (patch: 'TPatch) =
             WithConn.Patch.byField tableName fieldName op value patch conn
 
+        /// Remove a field from a document by the document's ID
+        member conn.removeFieldById tableName (docId: 'TKey) fieldName =
+            WithConn.RemoveField.byId tableName docId fieldName conn
+        
+        /// Remove a field from a document via a comparison on a JSON field in the document
+        member conn.removeFieldByField tableName whereFieldName op (value: obj) removeFieldName =
+            WithConn.RemoveField.byField tableName whereFieldName op value removeFieldName conn
+        
         /// Delete a document by its ID
         member conn.deleteById tableName (docId: 'TKey) =
             WithConn.Delete.byId tableName docId conn
@@ -204,6 +212,16 @@ type SqliteConnectionCSharpExtensions =
     static member inline PatchByField<'TPatch>(conn, tableName, fieldName, op, value: obj, patch: 'TPatch) =
         WithConn.Patch.byField tableName fieldName op value patch conn
 
+    /// Remove a field from a document by the document's ID
+    [<Extension>]
+    static member inline RemoveFieldById<'TKey>(conn, tableName, docId: 'TKey, fieldName) =
+        WithConn.RemoveField.byId tableName docId fieldName conn
+        
+    /// Remove a field from a document via a comparison on a JSON field in the document
+    [<Extension>]
+    static member inline RemoveFieldByField(conn, tableName, whereFieldName, op, value: obj, removeFieldName) =
+        WithConn.RemoveField.byField tableName whereFieldName op value removeFieldName conn
+    
     /// Delete a document by its ID
     [<Extension>]
     static member inline DeleteById<'TKey>(conn, tableName, docId: 'TKey) =

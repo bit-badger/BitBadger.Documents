@@ -532,6 +532,33 @@ let integrationTests =
                     do! RemoveField.byId SqliteDb.TableName "two" "Value"
                 }
             ]
+            testList "byField" [
+                testTask "succeeds when a field is removed" {
+                    use! db = SqliteDb.BuildDb()
+                    do! loadDocs ()
+                    
+                    do! RemoveField.byField SqliteDb.TableName "NumValue" EQ 17 "Sub"
+                    try
+                        let! _ = Find.byId<string, JsonDocument> SqliteDb.TableName "four"
+                        Expect.isTrue false "The updated document should have failed to parse"
+                    with
+                    | :? JsonException -> ()
+                    | exn as ex -> Expect.isTrue false $"Threw {ex.GetType().Name} ({ex.Message})"
+                }
+                testTask "succeeds when a field is not removed" {
+                    use! db = SqliteDb.BuildDb()
+                    do! loadDocs ()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveField.byField SqliteDb.TableName "NumValue" EQ 17 "Nothing"
+                }
+                testTask "succeeds when no document is matched" {
+                    use! db = SqliteDb.BuildDb()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveField.byField SqliteDb.TableName "Abracadabra" NE "apple" "Value"
+                }
+            ]
         ]
         testList "Delete" [
             testList "byId" [

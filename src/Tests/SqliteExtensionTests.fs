@@ -1,5 +1,6 @@
 module SqliteExtensionTests
 
+open System.Text.Json
 open BitBadger.Documents
 open BitBadger.Documents.Sqlite
 open BitBadger.Documents.Tests
@@ -342,6 +343,66 @@ let integrationTests =
                 
                 // This not raising an exception is the test
                 do! conn.patchByField SqliteDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+            }
+        ]
+        testList "removeFieldById" [
+            testTask "succeeds when a field is removed" {
+                use! db   = SqliteDb.BuildDb()
+                use  conn = Configuration.dbConn ()
+                do! loadDocs ()
+                
+                do! conn.removeFieldById SqliteDb.TableName "two" "Sub"
+                try
+                    let! _ = conn.findById<string, JsonDocument> SqliteDb.TableName "two"
+                    Expect.isTrue false "The updated document should have failed to parse"
+                with
+                | :? JsonException -> ()
+                | exn as ex -> Expect.isTrue false $"Threw {ex.GetType().Name} ({ex.Message})"
+            }
+            testTask "succeeds when a field is not removed" {
+                use! db   = SqliteDb.BuildDb()
+                use  conn = Configuration.dbConn ()
+                do! loadDocs ()
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldById SqliteDb.TableName "two" "AFieldThatIsNotThere"
+            }
+            testTask "succeeds when no document is matched" {
+                use! db   = SqliteDb.BuildDb()
+                use  conn = Configuration.dbConn ()
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldById SqliteDb.TableName "two" "Value"
+            }
+        ]
+        testList "removeFieldByField" [
+            testTask "succeeds when a field is removed" {
+                use! db   = SqliteDb.BuildDb()
+                use  conn = Configuration.dbConn ()
+                do! loadDocs ()
+                
+                do! conn.removeFieldByField SqliteDb.TableName "NumValue" EQ 17 "Sub"
+                try
+                    let! _ = conn.findById<string, JsonDocument> SqliteDb.TableName "four"
+                    Expect.isTrue false "The updated document should have failed to parse"
+                with
+                | :? JsonException -> ()
+                | exn as ex -> Expect.isTrue false $"Threw {ex.GetType().Name} ({ex.Message})"
+            }
+            testTask "succeeds when a field is not removed" {
+                use! db   = SqliteDb.BuildDb()
+                use  conn = Configuration.dbConn ()
+                do! loadDocs ()
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldByField SqliteDb.TableName "NumValue" EQ 17 "Nothing"
+            }
+            testTask "succeeds when no document is matched" {
+                use! db   = SqliteDb.BuildDb()
+                use  conn = Configuration.dbConn ()
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldByField SqliteDb.TableName "Abracadabra" NE "apple" "Value"
             }
         ]
         testList "deleteById" [
