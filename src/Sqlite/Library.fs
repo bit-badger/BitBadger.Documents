@@ -53,6 +53,21 @@ module Query =
             sprintf
                 "UPDATE %s SET data = json_patch(data, json(@data)) WHERE %s"
                 tableName (Query.whereByField fieldName op "@field")
+    
+    /// Queries to remove a field from a document
+    module RemoveField =
+        
+        /// Query to remove a field from a document by the document's ID
+        [<CompiledName "ById">]
+        let byId tableName =
+            $"""UPDATE %s{tableName} SET data = json_remove(data, @name) WHERE {Query.whereById "@id"}"""
+        
+        /// Query to remove a field from a document via a comparison on a JSON field within the document
+        [<CompiledName "ByField">]
+        let byField tableName fieldName op =
+            sprintf
+                "UPDATE %s SET data = json_remove(data, @name) WHERE %s"
+                tableName (Query.whereByField fieldName op "@field")
 
 
 /// Parameter handling helpers
@@ -73,6 +88,11 @@ module Parameters =
     [<CompiledName "Field">]
     let fieldParam (value: obj) =
         SqliteParameter("@field", value)
+
+    /// Create a JSON field name parameter (name "@name")
+    [<CompiledName "FieldName">]
+    let fieldNameParam name =
+        SqliteParameter("@name", $"$.%s{name}")
 
     /// An empty parameter sequence
     [<CompiledName "None">]
@@ -315,6 +335,23 @@ module WithConn =
             Custom.nonQuery
                 (Query.Patch.byField tableName fieldName op) [ fieldParam value; jsonParam "@data" patch ] conn
 
+    /// Commands to remove fields from documents
+    [<RequireQualifiedAccess>]
+    module RemoveField =
+        
+        /// Remove a field from a document by the document's ID
+        [<CompiledName "ById">]
+        let byId tableName (docId: 'TKey) fieldName conn =
+            Custom.nonQuery (Query.RemoveField.byId tableName) [ idParam docId; fieldNameParam fieldName ] conn
+        
+        /// Remove a field from a document via a comparison on a JSON field in the document
+        [<CompiledName "ByField">]
+        let byField tableName whereFieldName op (value: obj) removeFieldName conn =
+            Custom.nonQuery
+                (Query.RemoveField.byField tableName whereFieldName op)
+                [ fieldParam value; fieldNameParam removeFieldName ]
+                conn
+        
     /// Commands to delete documents
     [<RequireQualifiedAccess>]
     module Delete =
@@ -521,6 +558,22 @@ module Patch =
     let byField tableName fieldName op (value: obj) (patch: 'TPatch) =
         use conn = Configuration.dbConn ()
         WithConn.Patch.byField tableName fieldName op value patch conn
+
+/// Commands to remove fields from documents
+[<RequireQualifiedAccess>]
+module RemoveField =
+    
+    /// Remove a field from a document by the document's ID
+    [<CompiledName "ById">]
+    let byId tableName (docId: 'TKey) fieldName =
+        use conn = Configuration.dbConn ()
+        WithConn.RemoveField.byId tableName docId fieldName conn
+        
+    /// Remove a field from a document via a comparison on a JSON field in the document
+    [<CompiledName "ByField">]
+    let byField tableName whereFieldName op (value: obj) removeFieldName =
+        use conn = Configuration.dbConn ()
+        WithConn.RemoveField.byField tableName whereFieldName op value removeFieldName conn
 
 /// Commands to delete documents
 [<RequireQualifiedAccess>]

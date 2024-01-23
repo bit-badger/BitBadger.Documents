@@ -1,5 +1,6 @@
 module SqliteTests
 
+open System.Text.Json
 open BitBadger.Documents
 open BitBadger.Documents.Sqlite
 open BitBadger.Documents.Tests
@@ -29,6 +30,20 @@ let unitTests =
                         (Query.Patch.byField "tbl" "Part" NE)
                         "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field"
                         "UPDATE partial by JSON comparison query not correct"
+                }
+            ]
+            testList "RemoveField" [
+                test "byId succeeds" {
+                    Expect.equal
+                        (Query.RemoveField.byId "tbl")
+                        "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Id' = @id"
+                        "Remove field by ID query not correct"
+                }
+                test "byField succeeds" {
+                    Expect.equal
+                        (Query.RemoveField.byField "tbl" "Fly" GT)
+                        "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Fly' > @field"
+                        "Remove field by field query not correct"
                 }
             ]
         ]
@@ -486,6 +501,35 @@ let integrationTests =
                     
                     // This not raising an exception is the test
                     do! Patch.byField SqliteDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+                }
+            ]
+        ]
+        testList "RemoveField" [
+            testList "byId" [
+                testTask "succeeds when a field is removed" {
+                    use! db = SqliteDb.BuildDb()
+                    do! loadDocs ()
+                    
+                    do! RemoveField.byId SqliteDb.TableName "two" "Sub"
+                    try
+                        let! _ = Find.byId<string, JsonDocument> SqliteDb.TableName "two"
+                        Expect.isTrue false "The updated document should have failed to parse"
+                    with
+                    | :? JsonException -> ()
+                    | exn as ex -> Expect.isTrue false $"Threw {ex.GetType().Name} ({ex.Message})"
+                }
+                testTask "succeeds when a field is not removed" {
+                    use! db = SqliteDb.BuildDb()
+                    do! loadDocs ()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveField.byId SqliteDb.TableName "two" "AFieldThatIsNotThere"
+                }
+                testTask "succeeds when no document is matched" {
+                    use! db = SqliteDb.BuildDb()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveField.byId SqliteDb.TableName "two" "Value"
                 }
             ]
         ]

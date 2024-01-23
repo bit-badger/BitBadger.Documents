@@ -1,4 +1,5 @@
-﻿using Expecto.CSharp;
+﻿using System.Text.Json;
+using Expecto.CSharp;
 using Expecto;
 using Microsoft.Data.Sqlite;
 using Microsoft.FSharp.Core;
@@ -40,6 +41,21 @@ public static class SqliteCSharpTests
                         "UPDATE partial by JSON comparison query not correct");
                 })
             }),
+            TestList("RemoveField", new[]
+            {
+                TestCase("ById succeeds", () =>
+                {
+                    Expect.equal(Sqlite.Query.RemoveField.ById("tbl"),
+                        "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Id' = @id",
+                        "Remove field by ID query not correct");
+                }),
+                TestCase("ByField succeeds", () =>
+                {
+                    Expect.equal(Sqlite.Query.RemoveField.ByField("tbl", "Fly", Op.LT),
+                        "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Fly' < @field",
+                        "Remove field by field query not correct");
+                })
+            })
         }),
         TestList("Parameters", new[]
         {
@@ -537,6 +553,37 @@ public static class SqliteCSharpTests
 
                     // This not raising an exception is the test
                     await Patch.ByField(SqliteDb.TableName, "Value", Op.EQ, "burgundy", new { Foo = "green" });
+                })
+            })
+        }),
+        TestList("RemoveField", new[]
+        {
+            TestList("ById", new[]
+            {
+                TestCase("succeeds when a field is removed", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveField.ById(SqliteDb.TableName, "two", "Sub");
+                    var updated = await Find.ById<string, JsonDocument>(SqliteDb.TableName, "two");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a field is not removed", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    await LoadDocs();
+                        
+                    // This not raising an exception is the test
+                    await RemoveField.ById(SqliteDb.TableName, "two", "AFieldThatIsNotThere");
+                }),
+                TestCase("succeeds when no document is matched", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    
+                    // This not raising an exception is the test
+                    await RemoveField.ById(SqliteDb.TableName, "two", "Value");
                 })
             })
         }),
