@@ -88,13 +88,13 @@ module Extensions =
         member conn.patchByField tableName field (patch: 'TPatch) =
             WithConn.Patch.byField tableName field patch conn
 
-        /// Remove a field from a document by the document's ID
-        member conn.removeFieldById tableName (docId: 'TKey) fieldName =
-            WithConn.RemoveField.byId tableName docId fieldName conn
+        /// Remove fields from a document by the document's ID
+        member conn.removeFieldsById tableName (docId: 'TKey) fieldNames =
+            WithConn.RemoveFields.byId tableName docId fieldNames conn
         
         /// Remove a field from a document via a comparison on a JSON field in the document
-        member conn.removeFieldByField tableName field fieldName =
-            WithConn.RemoveField.byField tableName field fieldName conn
+        member conn.removeFieldsByField tableName field fieldNames =
+            WithConn.RemoveFields.byField tableName field fieldNames conn
         
         /// Delete a document by its ID
         member conn.deleteById tableName (docId: 'TKey) =
@@ -212,15 +212,15 @@ type SqliteConnectionCSharpExtensions =
     static member inline PatchByField<'TPatch>(conn, tableName, field, patch: 'TPatch) =
         WithConn.Patch.byField tableName field patch conn
 
-    /// Remove a field from a document by the document's ID
+    /// Remove fields from a document by the document's ID
     [<Extension>]
-    static member inline RemoveFieldById<'TKey>(conn, tableName, docId: 'TKey, fieldName) =
-        WithConn.RemoveField.byId tableName docId fieldName conn
+    static member inline RemoveFieldsById<'TKey>(conn, tableName, docId: 'TKey, fieldNames) =
+        WithConn.RemoveFields.ById(tableName, docId, fieldNames, conn)
         
-    /// Remove a field from a document via a comparison on a JSON field in the document
+    /// Remove fields from documents via a comparison on a JSON field in the document
     [<Extension>]
-    static member inline RemoveFieldByField(conn, tableName, field, fieldName) =
-        WithConn.RemoveField.byField tableName field fieldName conn
+    static member inline RemoveFieldsByField(conn, tableName, field, fieldNames) =
+        WithConn.RemoveFields.ByField(tableName, field, fieldNames, conn)
     
     /// Delete a document by its ID
     [<Extension>]

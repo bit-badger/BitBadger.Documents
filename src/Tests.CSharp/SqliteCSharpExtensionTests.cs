@@ -467,17 +467,18 @@ public static class SqliteCSharpExtensionTests
                 await conn.PatchByField(SqliteDb.TableName, Field.EQ("Value", "burgundy"), new { Foo = "green" });
             })
         }),
-        TestList("RemoveFieldById", new[]
+        TestList("RemoveFieldsById", new[]
         {
-            TestCase("succeeds when a field is removed", async () =>
+            TestCase("succeeds when fields are removed", async () =>
             {
                 await using var db = await SqliteDb.BuildDb();
                 await using var conn = Sqlite.Configuration.DbConn();
                 await LoadDocs();
 
-                await conn.RemoveFieldById(SqliteDb.TableName, "two", "Sub");
+                await conn.RemoveFieldsById(SqliteDb.TableName, "two", [ "Sub", "Value" ]);
                 var updated = await Find.ById<string, JsonDocument>(SqliteDb.TableName, "two");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
+                Expect.equal(updated.Value, "", "The string value should have been removed");
                 Expect.isNull(updated.Sub, "The sub-document should have been removed");
             }),
             TestCase("succeeds when a field is not removed", async () =>
@@ -487,7 +488,7 @@ public static class SqliteCSharpExtensionTests
                 await LoadDocs();
                     
                 // This not raising an exception is the test
-                await conn.RemoveFieldById(SqliteDb.TableName, "two", "AFieldThatIsNotThere");
+                await conn.RemoveFieldsById(SqliteDb.TableName, "two", [ "AFieldThatIsNotThere" ]);
             }),
             TestCase("succeeds when no document is matched", async () =>
             {
@@ -495,10 +496,10 @@ public static class SqliteCSharpExtensionTests
                 await using var conn = Sqlite.Configuration.DbConn();
                 
                 // This not raising an exception is the test
-                await conn.RemoveFieldById(SqliteDb.TableName, "two", "Value");
+                await conn.RemoveFieldsById(SqliteDb.TableName, "two", [ "Value" ]);
             })
         }),
-        TestList("RemoveFieldByField", new[]
+        TestList("RemoveFieldsByField", new[]
         {
             TestCase("succeeds when a field is removed", async () =>
             {
@@ -506,7 +507,7 @@ public static class SqliteCSharpExtensionTests
                 await using var conn = Sqlite.Configuration.DbConn();
                 await LoadDocs();
 
-                await conn.RemoveFieldByField(SqliteDb.TableName, Field.EQ("NumValue", 17), "Sub");
+                await conn.RemoveFieldsByField(SqliteDb.TableName, Field.EQ("NumValue", 17), [ "Sub" ]);
                 var updated = await Find.ById<string, JsonDocument>(SqliteDb.TableName, "four");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
                 Expect.isNull(updated.Sub, "The sub-document should have been removed");
@@ -518,7 +519,7 @@ public static class SqliteCSharpExtensionTests
                 await LoadDocs();
                     
                 // This not raising an exception is the test
-                await conn.RemoveFieldByField(SqliteDb.TableName, Field.EQ("NumValue", 17), "Nothing");
+                await conn.RemoveFieldsByField(SqliteDb.TableName, Field.EQ("NumValue", 17), [ "Nothing" ]);
             }),
             TestCase("succeeds when no document is matched", async () =>
             {
@@ -526,7 +527,7 @@ public static class SqliteCSharpExtensionTests
                 await using var conn = Sqlite.Configuration.DbConn();
                 
                 // This not raising an exception is the test
-                await conn.RemoveFieldByField(SqliteDb.TableName, Field.NE("Abracadabra", "apple"), "Value");
+                await conn.RemoveFieldsByField(SqliteDb.TableName, Field.NE("Abracadabra", "apple"), [ "Value" ]);
             })
         }),
         TestList("DeleteById", new[]

@@ -616,6 +616,162 @@ let integrationTests =
                 do! conn.patchByJsonPath PostgresDb.TableName "$.NumValue ? (@ < 0)" {| Foo = "green" |}
             }
         ]
+        testList "removeFieldsById" [
+            testTask "succeeds when multiple fields are removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsById PostgresDb.TableName "two" [ "Sub"; "Value" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 1 "There should be 1 document without Value fields"
+            }
+            testTask "succeeds when a single field is removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsById PostgresDb.TableName "two" [ "Sub" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 0 "There should be no documents without Value fields"
+            }
+            testTask "succeeds when a field is not removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+                    
+                // This not raising an exception is the test
+                do! conn.removeFieldsById PostgresDb.TableName "two" [ "AFieldThatIsNotThere" ]
+            }
+            testTask "succeeds when no document is matched" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldsById PostgresDb.TableName "two" [ "Value" ]
+            }
+        ]
+        testList "removeFieldsByField" [
+            testTask "succeeds when multiple fields are removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByField PostgresDb.TableName (Field.EQ "NumValue" "17") [ "Sub"; "Value" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 1 "There should be 1 document without Value fields"
+            }
+            testTask "succeeds when a single field is removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByField PostgresDb.TableName (Field.EQ "NumValue" "17") [ "Sub" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 0 "There should be no documents without Value fields"
+            }
+            testTask "succeeds when a field is not removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+                    
+                // This not raising an exception is the test
+                do! conn.removeFieldsByField PostgresDb.TableName (Field.EQ "NumValue" "17") [ "Nothing" ]
+            }
+            testTask "succeeds when no document is matched" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldsByField PostgresDb.TableName (Field.NE "Abracadabra" "apple") [ "Value" ]
+            }
+        ]
+        testList "removeFieldsByContains" [
+            testTask "succeeds when multiple fields are removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByContains PostgresDb.TableName {| NumValue = 17 |} [ "Sub"; "Value" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 1 "There should be 1 document without Value fields"
+            }
+            testTask "succeeds when a single field is removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByContains PostgresDb.TableName {| NumValue = 17 |} [ "Sub" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 0 "There should be no documents without Value fields"
+            }
+            testTask "succeeds when a field is not removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+                    
+                // This not raising an exception is the test
+                do! conn.removeFieldsByContains PostgresDb.TableName {| NumValue = 17 |} [ "Nothing" ]
+            }
+            testTask "succeeds when no document is matched" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldsByContains PostgresDb.TableName {| Abracadabra = "apple" |} [ "Value" ]
+            }
+        ]
+        testList "removeFieldsByJsonPath" [
+            testTask "succeeds when multiple fields are removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByJsonPath PostgresDb.TableName "$.NumValue ? (@ == 17)" [ "Sub"; "Value" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 1 "There should be 1 document without Value fields"
+            }
+            testTask "succeeds when a single field is removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByJsonPath PostgresDb.TableName "$.NumValue ? (@ == 17)" [ "Sub" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 0 "There should be no documents without Value fields"
+            }
+            testTask "succeeds when a field is not removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+                    
+                // This not raising an exception is the test
+                do! conn.removeFieldsByJsonPath PostgresDb.TableName "$.NumValue ? (@ == 17)" [ "Nothing" ]
+            }
+            testTask "succeeds when no document is matched" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldsByJsonPath PostgresDb.TableName "$.Abracadabra ? (@ == \"apple\")" [ "Value" ]
+            }
+        ]
         testList "deleteById" [
             testTask "succeeds when a document is deleted" {
                 use db   = PostgresDb.BuildDb()

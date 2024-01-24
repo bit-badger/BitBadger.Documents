@@ -20,7 +20,7 @@ let unitTests =
             }
             testList "addFieldParam" [
                 test "succeeds when a parameter is added" {
-                    let paramList = addFieldParam (Field.EQ "it" "242") []
+                    let paramList = addFieldParam "@field" (Field.EQ "it" "242") []
                     Expect.hasLength paramList 1 "There should have been a parameter added"
                     let it = paramList[0]
                     Expect.equal (fst it) "@field" "Field parameter name not correct"
@@ -31,7 +31,7 @@ let unitTests =
                     | _ -> Expect.isTrue false "The parameter was not a Parameter type"
                 }
                 test "succeeds when a parameter is not added" {
-                    let paramList = addFieldParam (Field.EX "tacos") []
+                    let paramList = addFieldParam "@field" (Field.EX "tacos") []
                     Expect.isEmpty paramList "There should not have been any parameters added"
                 }
             ]
@@ -133,6 +133,32 @@ let unitTests =
                         (Query.Patch.byJsonPath PostgresDb.TableName)
                         $"UPDATE {PostgresDb.TableName} SET data = data || @data WHERE data @? @path::jsonpath"
                         "UPDATE partial by JSON Path statement not correct"
+                }
+            ]
+            testList "RemoveFields" [
+                test "byId succeeds" {
+                    Expect.equal
+                        (Query.RemoveFields.byId "tbl")
+                        "UPDATE tbl SET data = data - @name WHERE data ->> 'Id' = @id"
+                        "Remove field by ID query not correct"
+                }
+                test "byField succeeds" {
+                    Expect.equal
+                        (Query.RemoveFields.byField "tbl" (Field.LT "Fly" 0))
+                        "UPDATE tbl SET data = data - @name WHERE data ->> 'Fly' < @field"
+                        "Remove field by field query not correct"
+                }
+                test "byContains succeeds" {
+                    Expect.equal
+                        (Query.RemoveFields.byContains "tbl")
+                        "UPDATE tbl SET data = data - @name WHERE data @> @criteria"
+                        "Remove field by contains query not correct"
+                }
+                test "byJsonPath succeeds" {
+                    Expect.equal
+                        (Query.RemoveFields.byJsonPath "tbl")
+                        "UPDATE tbl SET data = data - @name WHERE data @? @path::jsonpath"
+                        "Remove field by JSON path query not correct"
                 }
             ]
             testList "Delete" [
@@ -740,6 +766,148 @@ let integrationTests =
                     
                     // This not raising an exception is the test
                     do! Patch.byJsonPath PostgresDb.TableName "$.NumValue ? (@ < 0)" {| Foo = "green" |}
+                }
+            ]
+        ]
+        testList "RemoveFields" [
+            testList "byId" [
+                testTask "succeeds when multiple fields are removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! RemoveFields.byId PostgresDb.TableName "two" [ "Sub"; "Value" ]
+                    let! noSubs = Count.byField PostgresDb.TableName (Field.NEX "Sub")
+                    Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                    let! noValue = Count.byField PostgresDb.TableName (Field.NEX "Value")
+                    Expect.equal noValue 1 "There should be 1 document without Value fields"
+                }
+                testTask "succeeds when a single field is removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! RemoveFields.byId PostgresDb.TableName "two" [ "Sub" ]
+                    let! noSubs = Count.byField PostgresDb.TableName (Field.NEX "Sub")
+                    Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                    let! noValue = Count.byField PostgresDb.TableName (Field.NEX "Value")
+                    Expect.equal noValue 0 "There should be no documents without Value fields"
+                }
+                testTask "succeeds when a field is not removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+                        
+                    // This not raising an exception is the test
+                    do! RemoveFields.byId PostgresDb.TableName "two" [ "AFieldThatIsNotThere" ]
+                }
+                testTask "succeeds when no document is matched" {
+                    use db = PostgresDb.BuildDb()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveFields.byId PostgresDb.TableName "two" [ "Value" ]
+                }
+            ]
+            testList "byField" [
+                testTask "succeeds when multiple fields are removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! RemoveFields.byField PostgresDb.TableName (Field.EQ "NumValue" "17") [ "Sub"; "Value" ]
+                    let! noSubs = Count.byField PostgresDb.TableName (Field.NEX "Sub")
+                    Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                    let! noValue = Count.byField PostgresDb.TableName (Field.NEX "Value")
+                    Expect.equal noValue 1 "There should be 1 document without Value fields"
+                }
+                testTask "succeeds when a single field is removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! RemoveFields.byField PostgresDb.TableName (Field.EQ "NumValue" "17") [ "Sub" ]
+                    let! noSubs = Count.byField PostgresDb.TableName (Field.NEX "Sub")
+                    Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                    let! noValue = Count.byField PostgresDb.TableName (Field.NEX "Value")
+                    Expect.equal noValue 0 "There should be no documents without Value fields"
+                }
+                testTask "succeeds when a field is not removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+                        
+                    // This not raising an exception is the test
+                    do! RemoveFields.byField PostgresDb.TableName (Field.EQ "NumValue" "17") [ "Nothing" ]
+                }
+                testTask "succeeds when no document is matched" {
+                    use db = PostgresDb.BuildDb()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveFields.byField PostgresDb.TableName (Field.NE "Abracadabra" "apple") [ "Value" ]
+                }
+            ]
+            testList "byContains" [
+                testTask "succeeds when multiple fields are removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! RemoveFields.byContains PostgresDb.TableName {| NumValue = 17 |} [ "Sub"; "Value" ]
+                    let! noSubs = Count.byField PostgresDb.TableName (Field.NEX "Sub")
+                    Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                    let! noValue = Count.byField PostgresDb.TableName (Field.NEX "Value")
+                    Expect.equal noValue 1 "There should be 1 document without Value fields"
+                }
+                testTask "succeeds when a single field is removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! RemoveFields.byContains PostgresDb.TableName {| NumValue = 17 |} [ "Sub" ]
+                    let! noSubs = Count.byField PostgresDb.TableName (Field.NEX "Sub")
+                    Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                    let! noValue = Count.byField PostgresDb.TableName (Field.NEX "Value")
+                    Expect.equal noValue 0 "There should be no documents without Value fields"
+                }
+                testTask "succeeds when a field is not removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+                        
+                    // This not raising an exception is the test
+                    do! RemoveFields.byContains PostgresDb.TableName {| NumValue = 17 |} [ "Nothing" ]
+                }
+                testTask "succeeds when no document is matched" {
+                    use db = PostgresDb.BuildDb()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveFields.byContains PostgresDb.TableName {| Abracadabra = "apple" |} [ "Value" ]
+                }
+            ]
+            testList "byJsonPath" [
+                testTask "succeeds when multiple fields are removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! RemoveFields.byJsonPath PostgresDb.TableName "$.NumValue ? (@ == 17)" [ "Sub"; "Value" ]
+                    let! noSubs = Count.byField PostgresDb.TableName (Field.NEX "Sub")
+                    Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                    let! noValue = Count.byField PostgresDb.TableName (Field.NEX "Value")
+                    Expect.equal noValue 1 "There should be 1 document without Value fields"
+                }
+                testTask "succeeds when a single field is removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+
+                    do! RemoveFields.byJsonPath PostgresDb.TableName "$.NumValue ? (@ == 17)" [ "Sub" ]
+                    let! noSubs = Count.byField PostgresDb.TableName (Field.NEX "Sub")
+                    Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                    let! noValue = Count.byField PostgresDb.TableName (Field.NEX "Value")
+                    Expect.equal noValue 0 "There should be no documents without Value fields"
+                }
+                testTask "succeeds when a field is not removed" {
+                    use db = PostgresDb.BuildDb()
+                    do! loadDocs ()
+                        
+                    // This not raising an exception is the test
+                    do! RemoveFields.byJsonPath PostgresDb.TableName "$.NumValue ? (@ == 17)" [ "Nothing" ]
+                }
+                testTask "succeeds when no document is matched" {
+                    use db = PostgresDb.BuildDb()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveFields.byJsonPath PostgresDb.TableName "$.Abracadabra ? (@ == \"apple\")" [ "Value" ]
                 }
             ]
         ]

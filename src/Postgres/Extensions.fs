@@ -133,6 +133,22 @@ module Extensions =
         member conn.patchByJsonPath tableName jsonPath (patch: 'TPatch) =
             WithProps.Patch.byJsonPath tableName jsonPath patch (Sql.existingConnection conn)
         
+        /// Remove fields from a document by the document's ID
+        member conn.removeFieldsById tableName (docId: 'TKey) fieldNames =
+            WithProps.RemoveFields.byId tableName docId fieldNames (Sql.existingConnection conn)
+        
+        /// Remove fields from documents via a comparison on a JSON field in the document
+        member conn.removeFieldsByField tableName field fieldNames =
+            WithProps.RemoveFields.byField tableName field fieldNames (Sql.existingConnection conn)
+        
+        /// Remove fields from documents via a JSON containment query (@>)
+        member conn.removeFieldsByContains tableName (criteria: 'TContains) fieldNames =
+            WithProps.RemoveFields.byContains tableName criteria fieldNames (Sql.existingConnection conn)
+        
+        /// Remove fields from documents via a JSON Path match query (@?)
+        member conn.removeFieldsByJsonPath tableName jsonPath fieldNames =
+            WithProps.RemoveFields.byJsonPath tableName jsonPath fieldNames (Sql.existingConnection conn)
+        
         /// Delete a document by its ID
         member conn.deleteById tableName (docId: 'TKey) =
             WithProps.Delete.byId tableName docId (Sql.existingConnection conn)
@@ -311,6 +327,26 @@ type NpgsqlConnectionCSharpExtensions =
     [<Extension>]
     static member inline PatchByJsonPath(conn, tableName, jsonPath, patch: 'TPatch) =
         WithProps.Patch.byJsonPath tableName jsonPath patch (Sql.existingConnection conn)
+    
+    /// Remove fields from a document by the document's ID
+    [<Extension>]
+    static member inline RemoveFieldsById(conn, tableName, docId: 'TKey, fieldNames) =
+        WithProps.RemoveFields.ById(tableName, docId, fieldNames, Sql.existingConnection conn)
+        
+    /// Remove fields from documents via a comparison on a JSON field in the document
+    [<Extension>]
+    static member inline RemoveFieldsByField(conn, tableName, field, fieldNames) =
+        WithProps.RemoveFields.ByField(tableName, field, fieldNames, Sql.existingConnection conn)
+        
+    /// Remove fields from documents via a JSON containment query (@>)
+    [<Extension>]
+    static member inline RemoveFieldsByContains(conn, tableName, criteria: 'TContains, fieldNames) =
+        WithProps.RemoveFields.ByContains(tableName, criteria, fieldNames, Sql.existingConnection conn)
+        
+    /// Remove fields from documents via a JSON Path match query (@?)
+    [<Extension>]
+    static member inline RemoveFieldsByJsonPath(conn, tableName, jsonPath, fieldNames) =
+        WithProps.RemoveFields.ByJsonPath(tableName, jsonPath, fieldNames, Sql.existingConnection conn)
     
     /// Delete a document by its ID
     [<Extension>]

@@ -42,30 +42,45 @@ module Query =
     /// Document patching (partial update) queries
     module Patch =
         
+        /// Create an UPDATE statement to patch documents
+        let internal update tableName whereClause =
+            $"UPDATE %s{tableName} SET data = json_patch(data, json(@data)) WHERE %s{whereClause}"
+        
         /// Query to patch (partially update) a document by its ID
         [<CompiledName "ById">]
         let byId tableName =
-            $"""UPDATE %s{tableName} SET data = json_patch(data, json(@data)) WHERE {Query.whereById "@id"}"""
+            Query.whereById "@id" |> update tableName
             
         /// Query to patch (partially update) a document via a comparison on a JSON field
         [<CompiledName "ByField">]
         let byField tableName field =
-            sprintf
-                "UPDATE %s SET data = json_patch(data, json(@data)) WHERE %s"
-                tableName (Query.whereByField field "@field")
+            Query.whereByField field "@field" |> update tableName
     
-    /// Queries to remove a field from a document
-    module RemoveField =
+    /// Queries to remove fields from documents
+    module RemoveFields =
         
-        /// Query to remove a field from a document by the document's ID
-        [<CompiledName "ById">]
-        let byId tableName =
-            $"""UPDATE %s{tableName} SET data = json_remove(data, @name) WHERE {Query.whereById "@id"}"""
+        /// Create an UPDATE statement to remove parameters
+        let internal update tableName (parameters: SqliteParameter list) whereClause =
+            let paramNames = parameters |> List.map _.ParameterName |> String.concat ", "
+            $"UPDATE %s{tableName} SET data = json_remove(data, {paramNames}) WHERE {whereClause}"
+            
+        /// Query to remove fields from a document by the document's ID
+        [<CompiledName "FSharpById">]
+        let byId tableName parameters =
+            Query.whereById "@id" |> update tableName parameters
         
-        /// Query to remove a field from a document via a comparison on a JSON field within the document
-        [<CompiledName "ByField">]
-        let byField tableName field =
-            $"""UPDATE %s{tableName} SET data = json_remove(data, @name) WHERE {Query.whereByField field "@field"}"""
+        /// Query to remove fields from a document by the document's ID
+        let ById(tableName, parameters) =
+            byId tableName (List.ofSeq parameters)
+        
+        /// Query to remove fields from documents via a comparison on a JSON field within the document
+        [<CompiledName "FSharpByField">]
+        let byField tableName field parameters =
+            Query.whereByField field "@field" |> update tableName parameters
+        
+        /// Query to remove fields from documents via a comparison on a JSON field within the document
+        let ByField(tableName, field, parameters) =
+            byField tableName field (List.ofSeq parameters)
 
 
 /// Parameter handling helpers
@@ -84,21 +99,23 @@ module Parameters =
 
     /// Create a JSON field parameter (name "@field")
     [<CompiledName "FSharpAddField">]
-    let addFieldParam field parameters =
-        match field.Op with
-        | EX | NEX -> parameters
-        | _ -> SqliteParameter("@field", field.Value) :: parameters
+    let addFieldParam name field parameters =
+        match field.Op with EX | NEX -> parameters | _ -> SqliteParameter(name, field.Value) :: parameters
     
     /// Create a JSON field parameter (name "@field")
-    let AddField field parameters =
+    let AddField(name, field, parameters) =
         match field.Op with
         | EX | NEX -> parameters
-        | _ -> SqliteParameter("@field", field.Value) |> Seq.singleton |> Seq.append parameters
+        | _ -> SqliteParameter(name, field.Value) |> Seq.singleton |> Seq.append parameters
 
-    /// Create a JSON field name parameter (name "@name")
-    [<CompiledName "FieldName">]
-    let fieldNameParam name =
-        SqliteParameter("@name", $"$.%s{name}")
+    /// Append JSON field name parameters for the given field names to the given parameters
+    [<CompiledName "FSharpFieldNames">]
+    let fieldNameParams paramName (fieldNames: string list) =
+        fieldNames |> List.mapi (fun idx name -> SqliteParameter($"%s{paramName}{idx}", $"$.{name}"))
+
+    /// Append JSON field name parameters for the given field names to the given parameters
+    let FieldNames(paramName, fieldNames: string seq) =
+        fieldNames |> Seq.mapi (fun idx name -> SqliteParameter($"%s{paramName}{idx}", $"$.{name}"))
 
     /// An empty parameter sequence
     [<CompiledName "None">]
@@ -250,7 +267,7 @@ module WithConn =
         /// Count matching documents using a comparison on a JSON field
         [<CompiledName "ByField">]
         let byField tableName field conn =
-            Custom.scalar (Query.Count.byField tableName field) (addFieldParam field []) toCount conn
+            Custom.scalar (Query.Count.byField tableName field) (addFieldParam "@field" field []) toCount conn
 
     /// Commands to determine if documents exist
     [<RequireQualifiedAccess>]
@@ -264,7 +281,7 @@ module WithConn =
         /// Determine if a document exists using a comparison on a JSON field
         [<CompiledName "ByField">]
         let byField tableName field conn =
-            Custom.scalar (Query.Exists.byField tableName field) (addFieldParam field []) toExists conn
+            Custom.scalar (Query.Exists.byField tableName field) (addFieldParam "@field" field []) toExists conn
     
     /// Commands to retrieve documents
     [<RequireQualifiedAccess>]
@@ -291,21 +308,24 @@ module WithConn =
         /// Retrieve documents via a comparison on a JSON field
         [<CompiledName "FSharpByField">]
         let byField<'TDoc> tableName field conn =
-            Custom.list<'TDoc> (Query.Find.byField tableName field) (addFieldParam field []) fromData<'TDoc> conn 
+            Custom.list<'TDoc>
+                (Query.Find.byField tableName field) (addFieldParam "@field" field []) fromData<'TDoc> conn 
         
         /// Retrieve documents via a comparison on a JSON field
         let ByField<'TDoc>(tableName, field, conn) =
-            Custom.List<'TDoc>(Query.Find.byField tableName field, addFieldParam field [], fromData<'TDoc>, conn) 
+            Custom.List<'TDoc>(
+                Query.Find.byField tableName field, addFieldParam "@field" field [], fromData<'TDoc>, conn) 
         
         /// Retrieve documents via a comparison on a JSON field, returning only the first result
         [<CompiledName "FSharpFirstByField">]
         let firstByField<'TDoc> tableName field conn =
-            Custom.single $"{Query.Find.byField tableName field} LIMIT 1" (addFieldParam field []) fromData<'TDoc> conn
+            Custom.single
+                $"{Query.Find.byField tableName field} LIMIT 1" (addFieldParam "@field" field []) fromData<'TDoc> conn
         
         /// Retrieve documents via a comparison on a JSON field, returning only the first result
         let FirstByField<'TDoc when 'TDoc: null>(tableName, field, conn) =
             Custom.Single(
-                $"{Query.Find.byField tableName field} LIMIT 1", addFieldParam field [], fromData<'TDoc>, conn)
+                $"{Query.Find.byField tableName field} LIMIT 1", addFieldParam "@field" field [], fromData<'TDoc>, conn)
     
     /// Commands to update documents
     [<RequireQualifiedAccess>]
@@ -337,23 +357,34 @@ module WithConn =
         /// Patch documents using a comparison on a JSON field
         [<CompiledName "ByField">]
         let byField tableName field (patch: 'TPatch) (conn: SqliteConnection) =
-            Custom.nonQuery (Query.Patch.byField tableName field) (addFieldParam field [ jsonParam "@data" patch ]) conn
+            Custom.nonQuery
+                (Query.Patch.byField tableName field) (addFieldParam "@field" field [ jsonParam "@data" patch ]) conn
 
     /// Commands to remove fields from documents
     [<RequireQualifiedAccess>]
-    module RemoveField =
+    module RemoveFields =
         
-        /// Remove a field from a document by the document's ID
-        [<CompiledName "ById">]
-        let byId tableName (docId: 'TKey) fieldName conn =
-            Custom.nonQuery (Query.RemoveField.byId tableName) [ idParam docId; fieldNameParam fieldName ] conn
+        /// Remove fields from a document by the document's ID
+        [<CompiledName "FSharpById">]
+        let byId tableName (docId: 'TKey) fieldNames conn =
+            let nameParams = fieldNameParams "@name" fieldNames
+            Custom.nonQuery (Query.RemoveFields.byId tableName nameParams) (idParam docId :: nameParams) conn
         
-        /// Remove a field from a document via a comparison on a JSON field in the document
-        [<CompiledName "ByField">]
-        let byField tableName field fieldName conn =
+        /// Remove fields from a document by the document's ID
+        let ById(tableName, docId: 'TKey, fieldNames, conn) =
+            byId tableName docId (List.ofSeq fieldNames) conn
+        
+        /// Remove fields from documents via a comparison on a JSON field in the document
+        [<CompiledName "FSharpByField">]
+        let byField tableName field fieldNames conn =
+            let nameParams = fieldNameParams "@name" fieldNames
             Custom.nonQuery
-                (Query.RemoveField.byField tableName field) (addFieldParam field [ fieldNameParam fieldName ]) conn
+                (Query.RemoveFields.byField tableName field nameParams) (addFieldParam "@field" field nameParams) conn
         
+        /// Remove fields from documents via a comparison on a JSON field in the document
+        let ByField(tableName, field, fieldNames, conn) =
+            byField tableName field (List.ofSeq fieldNames) conn
+    
     /// Commands to delete documents
     [<RequireQualifiedAccess>]
     module Delete =
@@ -366,7 +397,7 @@ module WithConn =
         /// Delete documents by matching a comparison on a JSON field
         [<CompiledName "ByField">]
         let byField tableName field conn =
-            Custom.nonQuery (Query.Delete.byField tableName field) (addFieldParam field []) conn
+            Custom.nonQuery (Query.Delete.byField tableName field) (addFieldParam "@field" field []) conn
 
 
 /// Commands to execute custom SQL queries
@@ -563,19 +594,29 @@ module Patch =
 
 /// Commands to remove fields from documents
 [<RequireQualifiedAccess>]
-module RemoveField =
+module RemoveFields =
     
-    /// Remove a field from a document by the document's ID
-    [<CompiledName "ById">]
-    let byId tableName (docId: 'TKey) fieldName =
+    /// Remove fields from a document by the document's ID
+    [<CompiledName "FSharpById">]
+    let byId tableName (docId: 'TKey) fieldNames =
         use conn = Configuration.dbConn ()
-        WithConn.RemoveField.byId tableName docId fieldName conn
+        WithConn.RemoveFields.byId tableName docId fieldNames conn
         
-    /// Remove a field from a document via a comparison on a JSON field in the document
-    [<CompiledName "ByField">]
-    let byField tableName field fieldName =
+    /// Remove fields from a document by the document's ID
+    let ById(tableName, docId: 'TKey, fieldNames) =
         use conn = Configuration.dbConn ()
-        WithConn.RemoveField.byField tableName field fieldName conn
+        WithConn.RemoveFields.ById(tableName, docId, fieldNames, conn)
+        
+    /// Remove field from documents via a comparison on a JSON field in the document
+    [<CompiledName "FSharpByField">]
+    let byField tableName field fieldNames =
+        use conn = Configuration.dbConn ()
+        WithConn.RemoveFields.byField tableName field fieldNames conn
+
+    /// Remove field from documents via a comparison on a JSON field in the document
+    let ByField(tableName, field, fieldNames) =
+        use conn = Configuration.dbConn ()
+        WithConn.RemoveFields.ByField(tableName, field, fieldNames, conn)
 
 /// Commands to delete documents
 [<RequireQualifiedAccess>]

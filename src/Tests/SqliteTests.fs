@@ -32,17 +32,20 @@ let unitTests =
                         "UPDATE partial by JSON comparison query not correct"
                 }
             ]
-            testList "RemoveField" [
+            testList "RemoveFields" [
                 test "byId succeeds" {
                     Expect.equal
-                        (Query.RemoveField.byId "tbl")
+                        (Query.RemoveFields.byId "tbl" [ SqliteParameter("@name", "one") ])
                         "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Id' = @id"
                         "Remove field by ID query not correct"
                 }
                 test "byField succeeds" {
                     Expect.equal
-                        (Query.RemoveField.byField "tbl" (Field.GT "Fly" 0))
-                        "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Fly' > @field"
+                        (Query.RemoveFields.byField
+                             "tbl"
+                             (Field.GT "Fly" 0)
+                             [ SqliteParameter("@name0", "one"); SqliteParameter("@name1", "two") ])
+                        "UPDATE tbl SET data = json_remove(data, @name0, @name1) WHERE data ->> 'Fly' > @field"
                         "Remove field by field query not correct"
                 }
             ]
@@ -60,14 +63,14 @@ let unitTests =
             }
             testList "addFieldParam" [
                 test "succeeds when adding a parameter" {
-                    let paramList = addFieldParam (Field.EQ "it" 99) []
+                    let paramList = addFieldParam "@field" (Field.EQ "it" 99) []
                     Expect.hasLength paramList 1 "There should have been a parameter added"
                     let theParam = paramList[0]
                     Expect.equal theParam.ParameterName "@field" "The parameter name is incorrect"
                     Expect.equal theParam.Value 99 "The parameter value is incorrect"
                 }
                 test "succeeds when not adding a parameter" {
-                    let paramList = addFieldParam (Field.NEX "Coffee") []
+                    let paramList = addFieldParam "@it" (Field.NEX "Coffee") []
                     Expect.isEmpty paramList "There should not have been any parameters added"
                 }
             ]
@@ -512,13 +515,13 @@ let integrationTests =
                 }
             ]
         ]
-        testList "RemoveField" [
+        testList "RemoveFields" [
             testList "byId" [
-                testTask "succeeds when a field is removed" {
+                testTask "succeeds when fields is removed" {
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! RemoveField.byId SqliteDb.TableName "two" "Sub"
+                    do! RemoveFields.byId SqliteDb.TableName "two" [ "Sub"; "Value" ]
                     try
                         let! _ = Find.byId<string, JsonDocument> SqliteDb.TableName "two"
                         Expect.isTrue false "The updated document should have failed to parse"
@@ -531,13 +534,13 @@ let integrationTests =
                     do! loadDocs ()
                     
                     // This not raising an exception is the test
-                    do! RemoveField.byId SqliteDb.TableName "two" "AFieldThatIsNotThere"
+                    do! RemoveFields.byId SqliteDb.TableName "two" [ "AFieldThatIsNotThere" ]
                 }
                 testTask "succeeds when no document is matched" {
                     use! db = SqliteDb.BuildDb()
                     
                     // This not raising an exception is the test
-                    do! RemoveField.byId SqliteDb.TableName "two" "Value"
+                    do! RemoveFields.byId SqliteDb.TableName "two" [ "Value" ]
                 }
             ]
             testList "byField" [
@@ -545,7 +548,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! RemoveField.byField SqliteDb.TableName (Field.EQ "NumValue" 17) "Sub"
+                    do! RemoveFields.byField SqliteDb.TableName (Field.EQ "NumValue" 17) [ "Sub" ]
                     try
                         let! _ = Find.byId<string, JsonDocument> SqliteDb.TableName "four"
                         Expect.isTrue false "The updated document should have failed to parse"
@@ -558,13 +561,13 @@ let integrationTests =
                     do! loadDocs ()
                     
                     // This not raising an exception is the test
-                    do! RemoveField.byField SqliteDb.TableName (Field.EQ "NumValue" 17) "Nothing"
+                    do! RemoveFields.byField SqliteDb.TableName (Field.EQ "NumValue" 17) [ "Nothing" ]
                 }
                 testTask "succeeds when no document is matched" {
                     use! db = SqliteDb.BuildDb()
                     
                     // This not raising an exception is the test
-                    do! RemoveField.byField SqliteDb.TableName (Field.NE "Abracadabra" "apple") "Value"
+                    do! RemoveFields.byField SqliteDb.TableName (Field.NE "Abracadabra" "apple") [ "Value" ]
                 }
             ]
         ]

@@ -11,7 +11,7 @@ using static Runner;
 /// <summary>
 /// C# tests for the PostgreSQL implementation of <tt>BitBadger.Documents</tt>
 /// </summary>
-public class PostgresCSharpTests
+public static class PostgresCSharpTests
 {
     /// <summary>
     /// Tests which do not hit the database
@@ -36,7 +36,8 @@ public class PostgresCSharpTests
             {
                 TestCase("succeeds when a parameter is added", () =>
                 {
-                    var it = Parameters.AddField(Field.EQ("it", "242"), Enumerable.Empty<Tuple<string, SqlValue>>())
+                    var it = Parameters
+                        .AddField("@field", Field.EQ("it", "242"), Enumerable.Empty<Tuple<string, SqlValue>>())
                         .ToList();
                     Expect.hasLength(it, 1, "There should have been a parameter added");
                     Expect.equal(it[0].Item1, "@field", "Field parameter not constructed correctly");
@@ -44,8 +45,35 @@ public class PostgresCSharpTests
                 }),
                 TestCase("succeeds when a parameter is not added", () =>
                 {
-                    var it = Parameters.AddField(Field.EX("It"), Enumerable.Empty<Tuple<string, SqlValue>>());
+                    var it = Parameters.AddField("@it", Field.EX("It"), Enumerable.Empty<Tuple<string, SqlValue>>());
                     Expect.isEmpty(it, "There should not have been any parameters added");
+                })
+            }),
+            TestList("RemoveFields", new[]
+            {
+                TestCase("ById succeeds", () =>
+                {
+                    Expect.equal(Postgres.Query.RemoveFields.ById("tbl"),
+                        "UPDATE tbl SET data = data - @name WHERE data ->> 'Id' = @id",
+                        "Remove field by ID query not correct");
+                }),
+                TestCase("ByField succeeds", () =>
+                {
+                    Expect.equal(Postgres.Query.RemoveFields.ByField("tbl", Field.LT("Fly", 0)),
+                        "UPDATE tbl SET data = data - @name WHERE data ->> 'Fly' < @field",
+                        "Remove field by field query not correct");
+                }),
+                TestCase("ByContains succeeds", () =>
+                {
+                    Expect.equal(Postgres.Query.RemoveFields.ByContains("tbl"),
+                        "UPDATE tbl SET data = data - @name WHERE data @> @criteria",
+                        "Remove field by contains query not correct");
+                }),
+                TestCase("ByJsonPath succeeds", () =>
+                {
+                    Expect.equal(Postgres.Query.RemoveFields.ByJsonPath("tbl"),
+                        "UPDATE tbl SET data = data - @name WHERE data @? @path::jsonpath",
+                        "Remove field by JSON path query not correct");
                 })
             }),
             TestCase("None succeeds", () =>
@@ -880,6 +908,170 @@ public class PostgresCSharpTests
                     
                     // This not raising an exception is the test
                     await Patch.ByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ < 0)", new { Foo = "green" });
+                })
+            })
+        }),
+        TestList("RemoveFields", new[]
+        {
+            TestList("ById", new[]
+            {
+                TestCase("succeeds when multiple fields are removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ById(PostgresDb.TableName, "two", [ "Sub", "Value" ]);
+                    var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "two");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.equal(updated.Value, "", "The string value should have been removed");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a single field is removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ById(PostgresDb.TableName, "two", [ "Sub" ]);
+                    var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "two");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.notEqual(updated.Value, "", "The string value should not have been removed");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a field is not removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+                        
+                    // This not raising an exception is the test
+                    await RemoveFields.ById(PostgresDb.TableName, "two", [ "AFieldThatIsNotThere" ]);
+                }),
+                TestCase("succeeds when no document is matched", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    
+                    // This not raising an exception is the test
+                    await RemoveFields.ById(PostgresDb.TableName, "two", [ "Value" ]);
+                })
+            }),
+            TestList("ByField", new[]
+            {
+                TestCase("succeeds when multiple fields are removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ByField(PostgresDb.TableName, Field.EQ("NumValue", "17"), [ "Sub", "Value" ]);
+                    var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.equal(updated.Value, "", "The string value should have been removed");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a single field is removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ByField(PostgresDb.TableName, Field.EQ("NumValue", "17"), [ "Sub" ]);
+                    var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.notEqual(updated.Value, "", "The string value should not have been removed");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a field is not removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+                        
+                    // This not raising an exception is the test
+                    await RemoveFields.ByField(PostgresDb.TableName, Field.EQ("NumValue", "17"), [ "Nothing" ]);
+                }),
+                TestCase("succeeds when no document is matched", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    
+                    // This not raising an exception is the test
+                    await RemoveFields.ByField(PostgresDb.TableName, Field.NE("Abracadabra", "apple"), [ "Value" ]);
+                })
+            }),
+            TestList("ByContains", new[]
+            {
+                TestCase("succeeds when multiple fields are removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ByContains(PostgresDb.TableName, new { NumValue = 17 }, [ "Sub", "Value" ]);
+                    var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.equal(updated.Value, "", "The string value should have been removed");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a single field is removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ByContains(PostgresDb.TableName, new { NumValue = 17 }, [ "Sub" ]);
+                    var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.notEqual(updated.Value, "", "The string value should not have been removed");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a field is not removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+                        
+                    // This not raising an exception is the test
+                    await RemoveFields.ByContains(PostgresDb.TableName, new { NumValue = 17 }, [ "Nothing" ]);
+                }),
+                TestCase("succeeds when no document is matched", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    
+                    // This not raising an exception is the test
+                    await RemoveFields.ByContains(PostgresDb.TableName, new { Abracadabra = "apple" }, [ "Value" ]);
+                })
+            }),
+            TestList("ByJsonPath", new[]
+            {
+                TestCase("succeeds when multiple fields are removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ == 17)", [ "Sub", "Value" ]);
+                    var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.equal(updated.Value, "", "The string value should have been removed");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a single field is removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ == 17)", [ "Sub" ]);
+                    var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.notEqual(updated.Value, "", "The string value should not have been removed");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a field is not removed", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    await LoadDocs();
+                        
+                    // This not raising an exception is the test
+                    await RemoveFields.ByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ == 17)", [ "Nothing" ]);
+                }),
+                TestCase("succeeds when no document is matched", async () =>
+                {
+                    await using var db = PostgresDb.BuildDb();
+                    
+                    // This not raising an exception is the test
+                    await RemoveFields.ByJsonPath(PostgresDb.TableName, "$.Abracadabra ? (@ == \"apple\")",
+                        [ "Value" ]);
                 })
             })
         }),

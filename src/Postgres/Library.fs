@@ -65,18 +65,28 @@ module Parameters =
 
     /// Create a JSON field parameter (name "@field")
     [<CompiledName "FSharpAddField">]
-    let addFieldParam field parameters =
+    let addFieldParam name field parameters =
         match field.Op with
         | EX | NEX -> parameters
-        | _ -> ("@field", Sql.parameter (NpgsqlParameter("@field", field.Value))) :: parameters
+        | _ -> (name, Sql.parameter (NpgsqlParameter(name, field.Value))) :: parameters
 
     /// Create a JSON field parameter (name "@field")
-    let AddField field parameters =
+    let AddField name field parameters =
         match field.Op with
         | EX | NEX -> parameters
-        | _ ->
-            ("@field", Sql.parameter (NpgsqlParameter("@field", field.Value))) |> Seq.singleton |> Seq.append parameters
+        | _ -> (name, Sql.parameter (NpgsqlParameter(name, field.Value))) |> Seq.singleton |> Seq.append parameters
 
+    /// Append JSON field name parameters for the given field names to the given parameters
+    [<CompiledName "FSharpFieldName">]
+    let fieldNameParam (fieldNames: string list) =
+        if fieldNames.Length = 1 then "@name", Sql.string fieldNames[0]
+        else "@name", Sql.stringArray (Array.ofList fieldNames)
+
+    /// Append JSON field name parameters for the given field names to the given parameters
+    let FieldName(fieldNames: string seq) =
+        if Seq.isEmpty fieldNames then "@name", Sql.string (Seq.head fieldNames)
+        else "@name", Sql.stringArray (Array.ofSeq fieldNames)
+    
     /// An empty parameter sequence
     [<CompiledName "None">]
     let noParams =
@@ -154,25 +164,56 @@ module Query =
     /// Queries to patch (partially update) documents
     module Patch =
 
+        /// Create an UPDATE statement to patch documents
+        let private update tableName whereClause =
+            $"UPDATE %s{tableName} SET data = data || @data WHERE {whereClause}"
+        
         /// Query to patch a document by its ID
         [<CompiledName "ById">]
         let byId tableName =
-            $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereById "@id"}"""
+            Query.whereById "@id" |> update tableName
         
         /// Query to patch documents match a JSON field comparison (->> =)
         [<CompiledName "ByField">]
         let byField tableName field =
-            $"""UPDATE %s{tableName} SET data = data || @data WHERE {Query.whereByField field "@field"}"""
+            Query.whereByField field "@field" |> update tableName
         
         /// Query to patch documents matching a JSON containment query (@>)
         [<CompiledName "ByContains">]
         let byContains tableName =
-            $"""UPDATE %s{tableName} SET data = data || @data WHERE {whereDataContains "@criteria"}"""
+            whereDataContains "@criteria" |> update tableName
 
         /// Query to patch documents matching a JSON containment query (@>)
         [<CompiledName "ByJsonPath">]
         let byJsonPath tableName =
-            $"""UPDATE %s{tableName} SET data = data || @data WHERE {whereJsonPathMatches "@path"}"""
+            whereJsonPathMatches "@path" |> update tableName
+
+    /// Queries to remove fields from documents
+    module RemoveFields =
+        
+        /// Create an UPDATE statement to remove parameters
+        let private update tableName whereClause =
+            $"UPDATE %s{tableName} SET data = data - @name WHERE {whereClause}"
+            
+        /// Query to remove fields from a document by the document's ID
+        [<CompiledName "ById">]
+        let byId tableName =
+            Query.whereById "@id" |> update tableName
+        
+        /// Query to remove fields from documents via a comparison on a JSON field within the document
+        [<CompiledName "ByField">]
+        let byField tableName field =
+            Query.whereByField field "@field" |> update tableName
+        
+        /// Query to patch documents matching a JSON containment query (@>)
+        [<CompiledName "ByContains">]
+        let byContains tableName =
+            whereDataContains "@criteria" |> update tableName
+
+        /// Query to patch documents matching a JSON containment query (@>)
+        [<CompiledName "ByJsonPath">]
+        let byJsonPath tableName =
+            whereJsonPathMatches "@path" |> update tableName
 
     /// Queries to delete documents
     module Delete =
@@ -312,7 +353,7 @@ module WithProps =
         /// Count matching documents using a JSON field comparison (->> =)
         [<CompiledName "ByField">]
         let byField tableName field sqlProps =
-            Custom.scalar (Query.Count.byField tableName field) (addFieldParam field []) toCount sqlProps
+            Custom.scalar (Query.Count.byField tableName field) (addFieldParam "@field" field []) toCount sqlProps
         
         /// Count matching documents using a JSON containment query (@>)
         [<CompiledName "ByContains">]
@@ -336,7 +377,7 @@ module WithProps =
         /// Determine if a document exists using a JSON field comparison (->> =)
         [<CompiledName "ByField">]
         let byField tableName field sqlProps =
-            Custom.scalar (Query.Exists.byField tableName field) (addFieldParam field []) toExists sqlProps
+            Custom.scalar (Query.Exists.byField tableName field) (addFieldParam "@field" field []) toExists sqlProps
         
         /// Determine if a document exists using a JSON containment query (@>)
         [<CompiledName "ByContains">]
@@ -373,11 +414,13 @@ module WithProps =
         /// Retrieve documents matching a JSON field comparison (->> =)
         [<CompiledName "FSharpByField">]
         let byField<'TDoc> tableName field sqlProps =
-            Custom.list<'TDoc> (Query.Find.byField tableName field) (addFieldParam field []) fromData<'TDoc> sqlProps
+            Custom.list<'TDoc>
+                (Query.Find.byField tableName field) (addFieldParam "@field" field []) fromData<'TDoc> sqlProps
         
         /// Retrieve documents matching a JSON field comparison (->> =)
         let ByField<'TDoc>(tableName, field, sqlProps) =
-            Custom.List<'TDoc>(Query.Find.byField tableName field, addFieldParam field [], fromData<'TDoc>, sqlProps)
+            Custom.List<'TDoc>(
+                Query.Find.byField tableName field, addFieldParam "@field" field [], fromData<'TDoc>, sqlProps)
         
         /// Retrieve documents matching a JSON containment query (@>)
         [<CompiledName "FSharpByContains">]
@@ -405,12 +448,18 @@ module WithProps =
         [<CompiledName "FSharpFirstByField">]
         let firstByField<'TDoc> tableName field sqlProps =
             Custom.single<'TDoc>
-                $"{Query.Find.byField tableName field} LIMIT 1" (addFieldParam field []) fromData<'TDoc> sqlProps
+                $"{Query.Find.byField tableName field} LIMIT 1"
+                (addFieldParam "@field" field [])
+                fromData<'TDoc>
+                sqlProps
             
         /// Retrieve the first document matching a JSON field comparison (->> =); returns null if not found
         let FirstByField<'TDoc when 'TDoc: null>(tableName, field, sqlProps) =
             Custom.Single<'TDoc>(
-                $"{Query.Find.byField tableName field} LIMIT 1", addFieldParam field [], fromData<'TDoc>, sqlProps)
+                $"{Query.Find.byField tableName field} LIMIT 1",
+                addFieldParam "@field" field [],
+                fromData<'TDoc>,
+                sqlProps)
             
         /// Retrieve the first document matching a JSON containment query (@>); returns None if not found
         [<CompiledName "FSharpFirstByContains">]
@@ -471,7 +520,9 @@ module WithProps =
         [<CompiledName "ByField">]
         let byField tableName field (patch: 'TPatch) sqlProps =
             Custom.nonQuery
-                (Query.Patch.byField tableName field) (addFieldParam field [ jsonParam "@data" patch ]) sqlProps
+                (Query.Patch.byField tableName field)
+                (addFieldParam "@field" field [ jsonParam "@data" patch ])
+                sqlProps
         
         /// Patch documents using a JSON containment query in the WHERE clause (@>)
         [<CompiledName "ByContains">]
@@ -485,6 +536,55 @@ module WithProps =
             Custom.nonQuery
                 (Query.Patch.byJsonPath tableName) [ jsonParam "@data" patch; "@path", Sql.string jsonPath ] sqlProps
 
+    /// Commands to remove fields from documents
+    [<RequireQualifiedAccess>]
+    module RemoveFields =
+        
+        /// Remove fields from a document by the document's ID
+        [<CompiledName "FSharpById">]
+        let byId tableName (docId: 'TKey) fieldNames sqlProps =
+            Custom.nonQuery (Query.RemoveFields.byId tableName) [ idParam docId; fieldNameParam fieldNames ] sqlProps
+        
+        /// Remove fields from a document by the document's ID
+        let ById(tableName, docId: 'TKey, fieldNames, sqlProps) =
+            byId tableName docId (List.ofSeq fieldNames) sqlProps
+        
+        /// Remove fields from documents via a comparison on a JSON field in the document
+        [<CompiledName "FSharpByField">]
+        let byField tableName field fieldNames sqlProps =
+            Custom.nonQuery
+                (Query.RemoveFields.byField tableName field)
+                (addFieldParam "@field" field [ fieldNameParam fieldNames ])
+                sqlProps
+        
+        /// Remove fields from documents via a comparison on a JSON field in the document
+        let ByField(tableName, field, fieldNames, sqlProps) =
+            byField tableName field (List.ofSeq fieldNames) sqlProps
+        
+        /// Remove fields from documents via a JSON containment query (@>)
+        [<CompiledName "FSharpByContains">]
+        let byContains tableName (criteria: 'TContains) fieldNames sqlProps =
+            Custom.nonQuery
+                (Query.RemoveFields.byContains tableName)
+                [ jsonParam "@criteria" criteria; fieldNameParam fieldNames ]
+                sqlProps
+    
+        /// Remove fields from documents via a JSON containment query (@>)
+        let ByContains(tableName, criteria: 'TContains, fieldNames, sqlProps) =
+            byContains tableName criteria (List.ofSeq fieldNames) sqlProps
+    
+        /// Remove fields from documents via a JSON Path match query (@?)
+        [<CompiledName "FSharpByJsonPath">]
+        let byJsonPath tableName jsonPath fieldNames sqlProps =
+            Custom.nonQuery
+                (Query.RemoveFields.byJsonPath tableName)
+                [ "@path", Sql.string jsonPath; fieldNameParam fieldNames ]
+                sqlProps
+    
+        /// Remove fields from documents via a JSON Path match query (@?)
+        let ByJsonPath(tableName, jsonPath, fieldNames, sqlProps) =
+            byJsonPath tableName jsonPath (List.ofSeq fieldNames) sqlProps
+    
     /// Commands to delete documents
     [<RequireQualifiedAccess>]
     module Delete =
@@ -497,7 +597,7 @@ module WithProps =
         /// Delete documents by matching a JSON field comparison query (->> =)
         [<CompiledName "ByField">]
         let byField tableName field sqlProps =
-            Custom.nonQuery (Query.Delete.byField tableName field) (addFieldParam field []) sqlProps
+            Custom.nonQuery (Query.Delete.byField tableName field) (addFieldParam "@field" field []) sqlProps
         
         /// Delete documents by matching a JSON contains query (@>)
         [<CompiledName "ByContains">]
@@ -753,6 +853,47 @@ module Patch =
         WithProps.Patch.byJsonPath tableName jsonPath patch (fromDataSource ())
 
 
+/// Commands to remove fields from documents
+[<RequireQualifiedAccess>]
+module RemoveFields =
+    
+    /// Remove fields from a document by the document's ID
+    [<CompiledName "FSharpById">]
+    let byId tableName (docId: 'TKey) fieldNames =
+        WithProps.RemoveFields.byId tableName docId fieldNames (fromDataSource ())
+    
+    /// Remove fields from a document by the document's ID
+    let ById(tableName, docId: 'TKey, fieldNames) =
+        WithProps.RemoveFields.ById(tableName, docId, fieldNames, fromDataSource ())
+    
+    /// Remove fields from documents via a comparison on a JSON field in the document
+    [<CompiledName "FSharpByField">]
+    let byField tableName field fieldNames =
+        WithProps.RemoveFields.byField tableName field fieldNames (fromDataSource ())
+    
+    /// Remove fields from documents via a comparison on a JSON field in the document
+    let ByField(tableName, field, fieldNames) =
+        WithProps.RemoveFields.ByField(tableName, field, fieldNames, fromDataSource ())
+    
+    /// Remove fields from documents via a JSON containment query (@>)
+    [<CompiledName "FSharpByContains">]
+    let byContains tableName (criteria: 'TContains) fieldNames =
+        WithProps.RemoveFields.byContains tableName criteria fieldNames (fromDataSource ())
+
+    /// Remove fields from documents via a JSON containment query (@>)
+    let ByContains(tableName, criteria: 'TContains, fieldNames) =
+        WithProps.RemoveFields.ByContains(tableName, criteria, fieldNames, fromDataSource ())
+
+    /// Remove fields from documents via a JSON Path match query (@?)
+    [<CompiledName "FSharpByJsonPath">]
+    let byJsonPath tableName jsonPath fieldNames =
+        WithProps.RemoveFields.byJsonPath tableName jsonPath fieldNames (fromDataSource ())
+
+    /// Remove fields from documents via a JSON Path match query (@?)
+    let ByJsonPath(tableName, jsonPath, fieldNames) =
+        WithProps.RemoveFields.ByJsonPath(tableName, jsonPath, fieldNames, fromDataSource ())
+
+    
 /// Commands to delete documents
 [<RequireQualifiedAccess>]
 module Delete =

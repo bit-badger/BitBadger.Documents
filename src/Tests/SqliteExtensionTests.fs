@@ -345,13 +345,13 @@ let integrationTests =
                 do! conn.patchByField SqliteDb.TableName (Field.EQ "Value" "burgundy") {| Foo = "green" |}
             }
         ]
-        testList "removeFieldById" [
-            testTask "succeeds when a field is removed" {
+        testList "removeFieldsById" [
+            testTask "succeeds when fields are removed" {
                 use! db   = SqliteDb.BuildDb()
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
                 
-                do! conn.removeFieldById SqliteDb.TableName "two" "Sub"
+                do! conn.removeFieldsById SqliteDb.TableName "two" [ "Sub"; "Value" ]
                 try
                     let! _ = conn.findById<string, JsonDocument> SqliteDb.TableName "two"
                     Expect.isTrue false "The updated document should have failed to parse"
@@ -365,14 +365,14 @@ let integrationTests =
                 do! loadDocs ()
                 
                 // This not raising an exception is the test
-                do! conn.removeFieldById SqliteDb.TableName "two" "AFieldThatIsNotThere"
+                do! conn.removeFieldsById SqliteDb.TableName "two" [ "AFieldThatIsNotThere" ]
             }
             testTask "succeeds when no document is matched" {
                 use! db   = SqliteDb.BuildDb()
                 use  conn = Configuration.dbConn ()
                 
                 // This not raising an exception is the test
-                do! conn.removeFieldById SqliteDb.TableName "two" "Value"
+                do! conn.removeFieldsById SqliteDb.TableName "two" [ "Value" ]
             }
         ]
         testList "removeFieldByField" [
@@ -381,7 +381,7 @@ let integrationTests =
                 use  conn = Configuration.dbConn ()
                 do! loadDocs ()
                 
-                do! conn.removeFieldByField SqliteDb.TableName (Field.EQ "NumValue" 17) "Sub"
+                do! conn.removeFieldsByField SqliteDb.TableName (Field.EQ "NumValue" 17) [ "Sub" ]
                 try
                     let! _ = conn.findById<string, JsonDocument> SqliteDb.TableName "four"
                     Expect.isTrue false "The updated document should have failed to parse"
@@ -395,14 +395,14 @@ let integrationTests =
                 do! loadDocs ()
                 
                 // This not raising an exception is the test
-                do! conn.removeFieldByField SqliteDb.TableName (Field.EQ "NumValue" 17) "Nothing"
+                do! conn.removeFieldsByField SqliteDb.TableName (Field.EQ "NumValue" 17) [ "Nothing" ]
             }
             testTask "succeeds when no document is matched" {
                 use! db   = SqliteDb.BuildDb()
                 use  conn = Configuration.dbConn ()
                 
                 // This not raising an exception is the test
-                do! conn.removeFieldByField SqliteDb.TableName (Field.NE "Abracadabra" "apple") "Value"
+                do! conn.removeFieldsByField SqliteDb.TableName (Field.NE "Abracadabra" "apple") [ "Value" ]
             }
         ]
         testList "deleteById" [
