@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageReleaseNotes>Initial release; SQLite document implementation similar to BitBadger.Npgsql.Documents (RC 1)</PackageReleaseNotes>
+    <PackageReleaseNotes>Adds Field type for by-field operations (BREAKING from rc-1); adds RemoveFields* functions</PackageReleaseNotes>
     <PackageTags>JSON Document SQLite</PackageTags>
   </PropertyGroup>
 
@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.1" />
   </ItemGroup>
 
   <ItemGroup>

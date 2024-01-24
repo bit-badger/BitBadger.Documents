@@ -719,7 +719,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.RemoveFieldsById(PostgresDb.TableName, "two", [ "Sub", "Value" ]);
+                await conn.RemoveFieldsById(PostgresDb.TableName, "two", new[] { "Sub", "Value" });
                 var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "two");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
                 Expect.equal(updated.Value, "", "The string value should have been removed");
@@ -731,7 +731,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.RemoveFieldsById(PostgresDb.TableName, "two", [ "Sub" ]);
+                await conn.RemoveFieldsById(PostgresDb.TableName, "two", new[] { "Sub" });
                 var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "two");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
                 Expect.notEqual(updated.Value, "", "The string value should not have been removed");
@@ -744,7 +744,7 @@ public class PostgresCSharpExtensionTests
                 await LoadDocs();
                     
                 // This not raising an exception is the test
-                await conn.RemoveFieldsById(PostgresDb.TableName, "two", [ "AFieldThatIsNotThere" ]);
+                await conn.RemoveFieldsById(PostgresDb.TableName, "two", new[] { "AFieldThatIsNotThere" });
             }),
             TestCase("succeeds when no document is matched", async () =>
             {
@@ -752,7 +752,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 
                 // This not raising an exception is the test
-                await conn.RemoveFieldsById(PostgresDb.TableName, "two", [ "Value" ]);
+                await conn.RemoveFieldsById(PostgresDb.TableName, "two", new[] { "Value" });
             })
         }),
         TestList("RemoveFieldsByField", new[]
@@ -763,7 +763,8 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.RemoveFieldsByField(PostgresDb.TableName, Field.EQ("NumValue", "17"), [ "Sub", "Value" ]);
+                await conn.RemoveFieldsByField(PostgresDb.TableName, Field.EQ("NumValue", "17"),
+                    new[] { "Sub", "Value" });
                 var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
                 Expect.equal(updated.Value, "", "The string value should have been removed");
@@ -775,7 +776,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.RemoveFieldsByField(PostgresDb.TableName, Field.EQ("NumValue", "17"), [ "Sub" ]);
+                await conn.RemoveFieldsByField(PostgresDb.TableName, Field.EQ("NumValue", "17"), new[] { "Sub" });
                 var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
                 Expect.notEqual(updated.Value, "", "The string value should not have been removed");
@@ -788,7 +789,7 @@ public class PostgresCSharpExtensionTests
                 await LoadDocs();
                     
                 // This not raising an exception is the test
-                await conn.RemoveFieldsByField(PostgresDb.TableName, Field.EQ("NumValue", "17"), [ "Nothing" ]);
+                await conn.RemoveFieldsByField(PostgresDb.TableName, Field.EQ("NumValue", "17"), new[] { "Nothing" });
             }),
             TestCase("succeeds when no document is matched", async () =>
             {
@@ -796,7 +797,8 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 
                 // This not raising an exception is the test
-                await conn.RemoveFieldsByField(PostgresDb.TableName, Field.NE("Abracadabra", "apple"), [ "Value" ]);
+                await conn.RemoveFieldsByField(PostgresDb.TableName, Field.NE("Abracadabra", "apple"),
+                    new[] { "Value" });
             })
         }),
         TestList("RemoveFieldsByContains", new[]
@@ -807,7 +809,8 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.RemoveFieldsByContains(PostgresDb.TableName, new { NumValue = 17 }, [ "Sub", "Value" ]);
+                await conn.RemoveFieldsByContains(PostgresDb.TableName, new { NumValue = 17 },
+                    new[] { "Sub", "Value" });
                 var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
                 Expect.equal(updated.Value, "", "The string value should have been removed");
@@ -819,7 +822,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.RemoveFieldsByContains(PostgresDb.TableName, new { NumValue = 17 }, [ "Sub" ]);
+                await conn.RemoveFieldsByContains(PostgresDb.TableName, new { NumValue = 17 }, new[] { "Sub" });
                 var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
                 Expect.notEqual(updated.Value, "", "The string value should not have been removed");
@@ -832,7 +835,7 @@ public class PostgresCSharpExtensionTests
                 await LoadDocs();
                     
                 // This not raising an exception is the test
-                await conn.RemoveFieldsByContains(PostgresDb.TableName, new { NumValue = 17 }, [ "Nothing" ]);
+                await conn.RemoveFieldsByContains(PostgresDb.TableName, new { NumValue = 17 }, new[] { "Nothing" });
             }),
             TestCase("succeeds when no document is matched", async () =>
             {
@@ -840,7 +843,8 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 
                 // This not raising an exception is the test
-                await conn.RemoveFieldsByContains(PostgresDb.TableName, new { Abracadabra = "apple" }, [ "Value" ]);
+                await conn.RemoveFieldsByContains(PostgresDb.TableName, new { Abracadabra = "apple" },
+                    new[] { "Value" });
             })
         }),
         TestList("RemoveFieldsByJsonPath", new[]
@@ -851,7 +855,8 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.RemoveFieldsByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ == 17)", [ "Sub", "Value" ]);
+                await conn.RemoveFieldsByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ == 17)",
+                    new[] { "Sub", "Value" });
                 var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
                 Expect.equal(updated.Value, "", "The string value should have been removed");
@@ -863,7 +868,7 @@ public class PostgresCSharpExtensionTests
                 await using var conn = MkConn(db);
                 await LoadDocs();
 
-                await conn.RemoveFieldsByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ == 17)", [ "Sub" ]);
+                await conn.RemoveFieldsByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ == 17)", new[] { "Sub" });
                 var updated = await Find.ById<string, JsonDocument>(PostgresDb.TableName, "four");
                 Expect.isNotNull(updated, "The updated document should have been retrieved");
                 Expect.notEqual(updated.Value, "", "The string value should not have been removed");
@@ -876,7 +881,7 @@ public class PostgresCSharpExtensionTests
                 await LoadDocs();
                     
                 // This not raising an exception is the test
-                await conn.RemoveFieldsByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ == 17)", [ "Nothing" ]);
+                await conn.RemoveFieldsByJsonPath(PostgresDb.TableName, "$.NumValue ? (@ == 17)", new[] { "Nothing" });
             }),
             TestCase("succeeds when no document is matched", async () =>
             {
@@ -885,7 +890,7 @@ public class PostgresCSharpExtensionTests
                 
                 // This not raising an exception is the test
                 await conn.RemoveFieldsByJsonPath(PostgresDb.TableName, "$.Abracadabra ? (@ == \"apple\")",
-                    [ "Value" ]);
+                    new[] { "Value" });
             })
         }),
         TestList("DeleteById", new[]
