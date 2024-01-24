@@ -45,16 +45,16 @@ module Extensions =
             WithConn.Count.all tableName conn
         
         /// Count matching documents using a comparison on a JSON field
-        member conn.countByField tableName fieldName op (value: obj) =
-            WithConn.Count.byField tableName fieldName op value conn
+        member conn.countByField tableName field =
+            WithConn.Count.byField tableName field conn
         
         /// Determine if a document exists for the given ID
         member conn.existsById tableName (docId: 'TKey) =
             WithConn.Exists.byId tableName docId conn
 
         /// Determine if a document exists using a comparison on a JSON field
-        member conn.existsByField tableName fieldName op (value: obj) =
-            WithConn.Exists.byField tableName fieldName op value conn
+        member conn.existsByField tableName field =
+            WithConn.Exists.byField tableName field conn
 
         /// Retrieve all documents in the given table
         member conn.findAll<'TDoc> tableName =
@@ -65,12 +65,12 @@ module Extensions =
             WithConn.Find.byId<'TKey, 'TDoc> tableName docId conn
 
         /// Retrieve documents via a comparison on a JSON field
-        member conn.findByField<'TDoc> tableName fieldName op (value: obj) =
-            WithConn.Find.byField<'TDoc> tableName fieldName op value conn
+        member conn.findByField<'TDoc> tableName field =
+            WithConn.Find.byField<'TDoc> tableName field conn
 
         /// Retrieve documents via a comparison on a JSON field, returning only the first result
-        member conn.findFirstByField<'TDoc> tableName fieldName op (value: obj) =
-            WithConn.Find.firstByField<'TDoc> tableName fieldName op value conn
+        member conn.findFirstByField<'TDoc> tableName field =
+            WithConn.Find.firstByField<'TDoc> tableName field conn
 
         /// Update an entire document by its ID
         member conn.updateById tableName (docId: 'TKey) (document: 'TDoc) =
@@ -85,16 +85,24 @@ module Extensions =
             WithConn.Patch.byId tableName docId patch conn
         
         /// Patch documents using a comparison on a JSON field
-        member conn.patchByField tableName fieldName op (value: obj) (patch: 'TPatch) =
-            WithConn.Patch.byField tableName fieldName op value patch conn
+        member conn.patchByField tableName field (patch: 'TPatch) =
+            WithConn.Patch.byField tableName field patch conn
 
+        /// Remove fields from a document by the document's ID
+        member conn.removeFieldsById tableName (docId: 'TKey) fieldNames =
+            WithConn.RemoveFields.byId tableName docId fieldNames conn
+        
+        /// Remove a field from a document via a comparison on a JSON field in the document
+        member conn.removeFieldsByField tableName field fieldNames =
+            WithConn.RemoveFields.byField tableName field fieldNames conn
+        
         /// Delete a document by its ID
         member conn.deleteById tableName (docId: 'TKey) =
             WithConn.Delete.byId tableName docId conn
 
         /// Delete documents by matching a comparison on a JSON field
-        member conn.deleteByField tableName fieldName op (value: obj) =
-            WithConn.Delete.byField tableName fieldName op value conn
+        member conn.deleteByField tableName field =
+            WithConn.Delete.byField tableName field conn
 
 
 open System.Runtime.CompilerServices
@@ -151,8 +159,8 @@ type SqliteConnectionCSharpExtensions =
     
     /// Count matching documents using a comparison on a JSON field
     [<Extension>]
-    static member inline CountByField(conn, tableName, fieldName, op, value: obj) =
-        WithConn.Count.byField tableName fieldName op value conn
+    static member inline CountByField(conn, tableName, field) =
+        WithConn.Count.byField tableName field conn
 
     /// Determine if a document exists for the given ID
     [<Extension>]
@@ -161,8 +169,8 @@ type SqliteConnectionCSharpExtensions =
 
     /// Determine if a document exists using a comparison on a JSON field
     [<Extension>]
-    static member inline ExistsByField(conn, tableName, fieldName, op, value: obj) =
-        WithConn.Exists.byField tableName fieldName op value conn
+    static member inline ExistsByField(conn, tableName, field) =
+        WithConn.Exists.byField tableName field conn
     
     /// Retrieve all documents in the given table
     [<Extension>]
@@ -176,13 +184,13 @@ type SqliteConnectionCSharpExtensions =
 
     /// Retrieve documents via a comparison on a JSON field
     [<Extension>]
-    static member inline FindByField<'TDoc>(conn, tableName, fieldName, op, value) =
-        WithConn.Find.ByField<'TDoc>(tableName, fieldName, op, value, conn)
+    static member inline FindByField<'TDoc>(conn, tableName, field) =
+        WithConn.Find.ByField<'TDoc>(tableName, field, conn)
 
     /// Retrieve documents via a comparison on a JSON field, returning only the first result
     [<Extension>]
-    static member inline FindFirstByField<'TDoc when 'TDoc: null>(conn, tableName, fieldName, op, value: obj) =
-        WithConn.Find.FirstByField<'TDoc>(tableName, fieldName, op, value, conn)
+    static member inline FindFirstByField<'TDoc when 'TDoc: null>(conn, tableName, field) =
+        WithConn.Find.FirstByField<'TDoc>(tableName, field, conn)
 
     /// Update an entire document by its ID
     [<Extension>]
@@ -201,9 +209,19 @@ type SqliteConnectionCSharpExtensions =
     
     /// Patch documents using a comparison on a JSON field
     [<Extension>]
-    static member inline PatchByField<'TPatch>(conn, tableName, fieldName, op, value: obj, patch: 'TPatch) =
-        WithConn.Patch.byField tableName fieldName op value patch conn
+    static member inline PatchByField<'TPatch>(conn, tableName, field, patch: 'TPatch) =
+        WithConn.Patch.byField tableName field patch conn
 
+    /// Remove fields from a document by the document's ID
+    [<Extension>]
+    static member inline RemoveFieldsById<'TKey>(conn, tableName, docId: 'TKey, fieldNames) =
+        WithConn.RemoveFields.ById(tableName, docId, fieldNames, conn)
+        
+    /// Remove fields from documents via a comparison on a JSON field in the document
+    [<Extension>]
+    static member inline RemoveFieldsByField(conn, tableName, field, fieldNames) =
+        WithConn.RemoveFields.ByField(tableName, field, fieldNames, conn)
+    
     /// Delete a document by its ID
     [<Extension>]
     static member inline DeleteById<'TKey>(conn, tableName, docId: 'TKey) =
@@ -211,5 +229,5 @@ type SqliteConnectionCSharpExtensions =
 
     /// Delete documents by matching a comparison on a JSON field
     [<Extension>]
-    static member inline DeleteByField(conn, tableName, fieldName, op, value: obj) =
-        WithConn.Delete.byField tableName fieldName op value conn
+    static member inline DeleteByField(conn, tableName, field) =
+        WithConn.Delete.byField tableName field conn

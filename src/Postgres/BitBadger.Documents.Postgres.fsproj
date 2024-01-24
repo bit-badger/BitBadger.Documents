@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageReleaseNotes>Initial release; migrated from BitBadger.Npgsql.Documents, with field and extension additions (RC 1)</PackageReleaseNotes>
+    <PackageReleaseNotes>Adds Field type for by-field operations (BREAKING from rc-1); adds RemoveFields* functions</PackageReleaseNotes>
     <PackageTags>JSON Document PostgreSQL Npgsql</PackageTags>
   </PropertyGroup>
 

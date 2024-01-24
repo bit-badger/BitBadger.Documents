@@ -105,6 +105,63 @@ public static class CommonCSharpTests
                 Expect.equal(Op.NEX.ToString(), "IS NULL", "The \"not exists\" operator was not correct");
             })
         }),
+        TestList("Field", new[]
+        {
+            TestCase("EQ succeeds", () =>
+            {
+                var field = Field.EQ("Test", 14);
+                Expect.equal(field.Name, "Test", "Field name incorrect");
+                Expect.equal(field.Op, Op.EQ, "Operator incorrect");
+                Expect.equal(field.Value, 14, "Value incorrect");
+            }),
+            TestCase("GT succeeds", () =>
+            {
+                var field = Field.GT("Great", "night");
+                Expect.equal(field.Name, "Great", "Field name incorrect");
+                Expect.equal(field.Op, Op.GT, "Operator incorrect");
+                Expect.equal(field.Value, "night", "Value incorrect");
+            }),
+            TestCase("GE succeeds", () =>
+            {
+                var field = Field.GE("Nice", 88L);
+                Expect.equal(field.Name, "Nice", "Field name incorrect");
+                Expect.equal(field.Op, Op.GE, "Operator incorrect");
+                Expect.equal(field.Value, 88L, "Value incorrect");
+            }),
+            TestCase("LT succeeds", () =>
+            {
+                var field = Field.LT("Lesser", "seven");
+                Expect.equal(field.Name, "Lesser", "Field name incorrect");
+                Expect.equal(field.Op, Op.LT, "Operator incorrect");
+                Expect.equal(field.Value, "seven", "Value incorrect");
+            }),
+            TestCase("LE succeeds", () =>
+            {
+                var field = Field.LE("Nobody", "KNOWS");
+                Expect.equal(field.Name, "Nobody", "Field name incorrect");
+                Expect.equal(field.Op, Op.LE, "Operator incorrect");
+                Expect.equal(field.Value, "KNOWS", "Value incorrect");
+            }),
+            TestCase("NE succeeds", () =>
+            {
+                var field = Field.NE("Park", "here");
+                Expect.equal(field.Name, "Park", "Field name incorrect");
+                Expect.equal(field.Op, Op.NE, "Operator incorrect");
+                Expect.equal(field.Value, "here", "Value incorrect");
+            }),
+            TestCase("EX succeeds", () =>
+            {
+                var field = Field.EX("Groovy");
+                Expect.equal(field.Name, "Groovy", "Field name incorrect");
+                Expect.equal(field.Op, Op.EX, "Operator incorrect");
+            }),
+            TestCase("NEX succeeds", () =>
+            {
+                var field = Field.NEX("Rad");
+                Expect.equal(field.Name, "Rad", "Field name incorrect");
+                Expect.equal(field.Op, Op.NEX, "Operator incorrect");
+            })
+        }),
         TestList("Query", new[]
         {
             TestCase("SelectFromTable succeeds", () =>
@@ -120,12 +177,12 @@ public static class CommonCSharpTests
             {
                 TestCase("succeeds when a logical operator is passed", () =>
                 {
-                    Expect.equal(Query.WhereByField("theField", Op.GT, "@test"), "data ->> 'theField' > @test",
+                    Expect.equal(Query.WhereByField(Field.GT("theField", 0), "@test"), "data ->> 'theField' > @test",
                         "WHERE clause not correct");
                 }),
                 TestCase("succeeds when an existence operator is passed", () =>
                 {
-                    Expect.equal(Query.WhereByField("thatField", Op.NEX, ""), "data ->> 'thatField' IS NULL",
+                    Expect.equal(Query.WhereByField(Field.NEX("thatField"), ""), "data ->> 'thatField' IS NULL",
                         "WHERE clause not correct");
                 })
             }),
@@ -185,7 +242,7 @@ public static class CommonCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Query.Count.ByField("tbl", "thatField", Op.EQ),
+                    Expect.equal(Query.Count.ByField("tbl", Field.EQ("thatField", 0)),
                         "SELECT COUNT(*) AS it FROM tbl WHERE data ->> 'thatField' = @field",
                         "JSON field text comparison count query not correct");
                 })
@@ -200,7 +257,7 @@ public static class CommonCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Query.Exists.ByField("tbl", "Test", Op.LT),
+                    Expect.equal(Query.Exists.ByField("tbl", Field.LT("Test", 0)),
                         "SELECT EXISTS (SELECT 1 FROM tbl WHERE data ->> 'Test' < @field) AS it",
                         "JSON field text comparison exists query not correct");
                 })
@@ -214,7 +271,7 @@ public static class CommonCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Query.Find.ByField("tbl", "Golf", Op.GE),
+                    Expect.equal(Query.Find.ByField("tbl", Field.GE("Golf", 0)),
                         "SELECT data FROM tbl WHERE data ->> 'Golf' >= @field",
                         "SELECT by JSON comparison query not correct");
                 })
@@ -228,7 +285,7 @@ public static class CommonCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Query.Delete.ByField("tbl", "gone", Op.NEX),
+                    Expect.equal(Query.Delete.ByField("tbl", Field.NEX("gone")),
                         "DELETE FROM tbl WHERE data ->> 'gone' IS NULL",
                         "DELETE by JSON comparison query not correct");
                 })

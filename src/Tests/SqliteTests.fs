@@ -1,5 +1,6 @@
 module SqliteTests
 
+open System.Text.Json
 open BitBadger.Documents
 open BitBadger.Documents.Sqlite
 open BitBadger.Documents.Tests
@@ -26,9 +27,26 @@ let unitTests =
                 }
                 test "byField succeeds" {
                     Expect.equal
-                        (Query.Patch.byField "tbl" "Part" NE)
+                        (Query.Patch.byField "tbl" (Field.NE "Part" 0))
                         "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field"
                         "UPDATE partial by JSON comparison query not correct"
+                }
+            ]
+            testList "RemoveFields" [
+                test "byId succeeds" {
+                    Expect.equal
+                        (Query.RemoveFields.byId "tbl" [ SqliteParameter("@name", "one") ])
+                        "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Id' = @id"
+                        "Remove field by ID query not correct"
+                }
+                test "byField succeeds" {
+                    Expect.equal
+                        (Query.RemoveFields.byField
+                             "tbl"
+                             (Field.GT "Fly" 0)
+                             [ SqliteParameter("@name0", "one"); SqliteParameter("@name1", "two") ])
+                        "UPDATE tbl SET data = json_remove(data, @name0, @name1) WHERE data ->> 'Fly' > @field"
+                        "Remove field by field query not correct"
                 }
             ]
         ]
@@ -43,11 +61,19 @@ let unitTests =
                 Expect.equal theParam.ParameterName "@test" "The parameter name is incorrect"
                 Expect.equal theParam.Value """{"Nice":"job"}""" "The parameter value is incorrect"
             }
-            test "fieldParam succeeds" {
-                let theParam = fieldParam 99
-                Expect.equal theParam.ParameterName "@field" "The parameter name is incorrect"
-                Expect.equal theParam.Value 99 "The parameter value is incorrect"
-            }
+            testList "addFieldParam" [
+                test "succeeds when adding a parameter" {
+                    let paramList = addFieldParam "@field" (Field.EQ "it" 99) []
+                    Expect.hasLength paramList 1 "There should have been a parameter added"
+                    let theParam = paramList[0]
+                    Expect.equal theParam.ParameterName "@field" "The parameter name is incorrect"
+                    Expect.equal theParam.Value 99 "The parameter value is incorrect"
+                }
+                test "succeeds when not adding a parameter" {
+                    let paramList = addFieldParam "@it" (Field.NEX "Coffee") []
+                    Expect.isEmpty paramList "There should not have been any parameters added"
+                }
+            ]
             test "noParams succeeds" {
                 Expect.isEmpty noParams "The parameter list should have been empty"
             }
@@ -277,7 +303,7 @@ let integrationTests =
                 use! db = SqliteDb.BuildDb()
                 do! loadDocs ()
         
-                let! theCount = Count.byField SqliteDb.TableName "Value" EQ "purple"
+                let! theCount = Count.byField SqliteDb.TableName (Field.EQ "Value" "purple")
                 Expect.equal theCount 2L "There should have been 2 matching documents"
             }
         ]
@@ -303,14 +329,14 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! exists = Exists.byField SqliteDb.TableName "NumValue" EQ 10
+                    let! exists = Exists.byField SqliteDb.TableName (Field.EQ "NumValue" 10)
                     Expect.isTrue exists "There should have been existing documents"
                 }
                 testTask "succeeds when no matching documents exist" {
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! exists = Exists.byField SqliteDb.TableName "Nothing" LT "none"
+                    let! exists = Exists.byField SqliteDb.TableName (Field.LT "Nothing" "none")
                     Expect.isFalse exists "There should not have been any existing documents"
                 }
             ]
@@ -360,14 +386,14 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! docs = Find.byField<JsonDocument> SqliteDb.TableName "NumValue" GT 15
+                    let! docs = Find.byField<JsonDocument> SqliteDb.TableName (Field.GT "NumValue" 15)
                     Expect.equal (List.length docs) 2 "There should have been two documents returned"
                 }
                 testTask "succeeds when documents are not found" {
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! docs = Find.byField<JsonDocument> SqliteDb.TableName "NumValue" GT 100
+                    let! docs = Find.byField<JsonDocument> SqliteDb.TableName (Field.GT "NumValue" 100)
                     Expect.isTrue (List.isEmpty docs) "There should have been no documents returned"
                 }
             ]
@@ -376,7 +402,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName "Value" EQ "another"
+                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName (Field.EQ "Value" "another")
                     Expect.isTrue (Option.isSome doc) "There should have been a document returned"
                     Expect.equal doc.Value.Id "two" "The incorrect document was returned"
                 }
@@ -384,7 +410,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName "Sub.Foo" EQ "green"
+                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName (Field.EQ "Sub.Foo" "green")
                     Expect.isTrue (Option.isSome doc) "There should have been a document returned"
                     Expect.contains [ "two"; "four" ] doc.Value.Id "An incorrect document was returned"
                 }
@@ -392,7 +418,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName "Value" EQ "absent"
+                    let! doc = Find.firstByField<JsonDocument> SqliteDb.TableName (Field.EQ "Value" "absent")
                     Expect.isFalse (Option.isSome doc) "There should not have been a document returned"
                 }
             ]
@@ -474,8 +500,8 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
                     
-                    do! Patch.byField SqliteDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
-                    let! after = Count.byField SqliteDb.TableName "NumValue" EQ 77
+                    do! Patch.byField SqliteDb.TableName (Field.EQ "Value" "purple") {| NumValue = 77 |}
+                    let! after = Count.byField SqliteDb.TableName (Field.EQ "NumValue" 77)
                     Expect.equal after 2L "There should have been 2 documents returned"
                 }
                 testTask "succeeds when no document is updated" {
@@ -485,7 +511,63 @@ let integrationTests =
                     Expect.isEmpty before "There should have been no documents returned"
                     
                     // This not raising an exception is the test
-                    do! Patch.byField SqliteDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+                    do! Patch.byField SqliteDb.TableName (Field.EQ "Value" "burgundy") {| Foo = "green" |}
+                }
+            ]
+        ]
+        testList "RemoveFields" [
+            testList "byId" [
+                testTask "succeeds when fields is removed" {
+                    use! db = SqliteDb.BuildDb()
+                    do! loadDocs ()
+                    
+                    do! RemoveFields.byId SqliteDb.TableName "two" [ "Sub"; "Value" ]
+                    try
+                        let! _ = Find.byId<string, JsonDocument> SqliteDb.TableName "two"
+                        Expect.isTrue false "The updated document should have failed to parse"
+                    with
+                    | :? JsonException -> ()
+                    | exn as ex -> Expect.isTrue false $"Threw {ex.GetType().Name} ({ex.Message})"
+                }
+                testTask "succeeds when a field is not removed" {
+                    use! db = SqliteDb.BuildDb()
+                    do! loadDocs ()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveFields.byId SqliteDb.TableName "two" [ "AFieldThatIsNotThere" ]
+                }
+                testTask "succeeds when no document is matched" {
+                    use! db = SqliteDb.BuildDb()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveFields.byId SqliteDb.TableName "two" [ "Value" ]
+                }
+            ]
+            testList "byField" [
+                testTask "succeeds when a field is removed" {
+                    use! db = SqliteDb.BuildDb()
+                    do! loadDocs ()
+                    
+                    do! RemoveFields.byField SqliteDb.TableName (Field.EQ "NumValue" 17) [ "Sub" ]
+                    try
+                        let! _ = Find.byId<string, JsonDocument> SqliteDb.TableName "four"
+                        Expect.isTrue false "The updated document should have failed to parse"
+                    with
+                    | :? JsonException -> ()
+                    | exn as ex -> Expect.isTrue false $"Threw {ex.GetType().Name} ({ex.Message})"
+                }
+                testTask "succeeds when a field is not removed" {
+                    use! db = SqliteDb.BuildDb()
+                    do! loadDocs ()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveFields.byField SqliteDb.TableName (Field.EQ "NumValue" 17) [ "Nothing" ]
+                }
+                testTask "succeeds when no document is matched" {
+                    use! db = SqliteDb.BuildDb()
+                    
+                    // This not raising an exception is the test
+                    do! RemoveFields.byField SqliteDb.TableName (Field.NE "Abracadabra" "apple") [ "Value" ]
                 }
             ]
         ]
@@ -513,7 +595,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    do! Delete.byField SqliteDb.TableName "Value" NE "purple"
+                    do! Delete.byField SqliteDb.TableName (Field.NE "Value" "purple")
                     let! remaining = Count.all SqliteDb.TableName
                     Expect.equal remaining 2L "There should have been 2 documents remaining"
                 }
@@ -521,7 +603,7 @@ let integrationTests =
                     use! db = SqliteDb.BuildDb()
                     do! loadDocs ()
         
-                    do! Delete.byField SqliteDb.TableName "Value" EQ "crimson"
+                    do! Delete.byField SqliteDb.TableName (Field.EQ "Value" "crimson")
                     let! remaining = Count.all SqliteDb.TableName
                     Expect.equal remaining 5L "There should have been 5 documents remaining"
                 }

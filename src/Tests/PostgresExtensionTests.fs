@@ -214,7 +214,7 @@ let integrationTests =
             use conn = mkConn db
             do! loadDocs conn
             
-            let! theCount = conn.countByField PostgresDb.TableName "Value" EQ "purple"
+            let! theCount = conn.countByField PostgresDb.TableName (Field.EQ "Value" "purple")
             Expect.equal theCount 2 "There should have been 2 matching documents"
         }
         testTask "countByContains succeeds" {
@@ -257,7 +257,7 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
 
-                let! exists = conn.existsByField PostgresDb.TableName "Sub" EX ""
+                let! exists = conn.existsByField PostgresDb.TableName (Field.EX "Sub")
                 Expect.isTrue exists "There should have been existing documents"
             }
             testTask "succeeds when documents do not exist" {
@@ -265,7 +265,7 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
 
-                let! exists = conn.existsByField PostgresDb.TableName "NumValue" EQ "six"
+                let! exists = conn.existsByField PostgresDb.TableName (Field.EQ "NumValue" "six")
                 Expect.isFalse exists "There should not have been existing documents"
             }
         ]
@@ -354,7 +354,7 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
 
-                let! docs = conn.findByField<JsonDocument> PostgresDb.TableName "Value" EQ "another"
+                let! docs = conn.findByField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "another")
                 Expect.equal (List.length docs) 1 "There should have been one document returned"
             }
             testTask "succeeds when documents are not found" {
@@ -362,7 +362,7 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
 
-                let! docs = conn.findByField<JsonDocument> PostgresDb.TableName "Value" EQ "mauve"
+                let! docs = conn.findByField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "mauve")
                 Expect.isEmpty docs "There should have been no documents returned"
             }
         ]
@@ -408,7 +408,7 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
 
-                let! doc = conn.findFirstByField<JsonDocument> PostgresDb.TableName "Value" EQ "another"
+                let! doc = conn.findFirstByField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "another")
                 Expect.isSome doc "There should have been a document returned"
                 Expect.equal doc.Value.Id "two" "The incorrect document was returned"
             }
@@ -417,7 +417,7 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
 
-                let! doc = conn.findFirstByField<JsonDocument> PostgresDb.TableName "Value" EQ "purple"
+                let! doc = conn.findFirstByField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "purple")
                 Expect.isSome doc "There should have been a document returned"
                 Expect.contains [ "five"; "four" ] doc.Value.Id "An incorrect document was returned"
             }
@@ -426,7 +426,7 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
 
-                let! doc = conn.findFirstByField<JsonDocument> PostgresDb.TableName "Value" EQ "absent"
+                let! doc = conn.findFirstByField<JsonDocument> PostgresDb.TableName (Field.EQ "Value" "absent")
                 Expect.isNone doc "There should not have been a document returned"
             }
         ]
@@ -562,8 +562,8 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
                 
-                do! conn.patchByField PostgresDb.TableName "Value" EQ "purple" {| NumValue = 77 |}
-                let! after = conn.countByField PostgresDb.TableName "NumValue" EQ "77"
+                do! conn.patchByField PostgresDb.TableName (Field.EQ "Value" "purple") {| NumValue = 77 |}
+                let! after = conn.countByField PostgresDb.TableName (Field.EQ "NumValue" "77")
                 Expect.equal after 2 "There should have been 2 documents returned"
             }
             testTask "succeeds when no document is updated" {
@@ -573,7 +573,7 @@ let integrationTests =
                 Expect.equal before 0 "There should have been no documents returned"
                 
                 // This not raising an exception is the test
-                do! conn.patchByField PostgresDb.TableName "Value" EQ "burgundy" {| Foo = "green" |}
+                do! conn.patchByField PostgresDb.TableName (Field.EQ "Value" "burgundy") {| Foo = "green" |}
             }
         ]
         testList "patchByContains" [
@@ -616,6 +616,162 @@ let integrationTests =
                 do! conn.patchByJsonPath PostgresDb.TableName "$.NumValue ? (@ < 0)" {| Foo = "green" |}
             }
         ]
+        testList "removeFieldsById" [
+            testTask "succeeds when multiple fields are removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsById PostgresDb.TableName "two" [ "Sub"; "Value" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 1 "There should be 1 document without Value fields"
+            }
+            testTask "succeeds when a single field is removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsById PostgresDb.TableName "two" [ "Sub" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 0 "There should be no documents without Value fields"
+            }
+            testTask "succeeds when a field is not removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+                    
+                // This not raising an exception is the test
+                do! conn.removeFieldsById PostgresDb.TableName "two" [ "AFieldThatIsNotThere" ]
+            }
+            testTask "succeeds when no document is matched" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldsById PostgresDb.TableName "two" [ "Value" ]
+            }
+        ]
+        testList "removeFieldsByField" [
+            testTask "succeeds when multiple fields are removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByField PostgresDb.TableName (Field.EQ "NumValue" "17") [ "Sub"; "Value" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 1 "There should be 1 document without Value fields"
+            }
+            testTask "succeeds when a single field is removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByField PostgresDb.TableName (Field.EQ "NumValue" "17") [ "Sub" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 0 "There should be no documents without Value fields"
+            }
+            testTask "succeeds when a field is not removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+                    
+                // This not raising an exception is the test
+                do! conn.removeFieldsByField PostgresDb.TableName (Field.EQ "NumValue" "17") [ "Nothing" ]
+            }
+            testTask "succeeds when no document is matched" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldsByField PostgresDb.TableName (Field.NE "Abracadabra" "apple") [ "Value" ]
+            }
+        ]
+        testList "removeFieldsByContains" [
+            testTask "succeeds when multiple fields are removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByContains PostgresDb.TableName {| NumValue = 17 |} [ "Sub"; "Value" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 1 "There should be 1 document without Value fields"
+            }
+            testTask "succeeds when a single field is removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByContains PostgresDb.TableName {| NumValue = 17 |} [ "Sub" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 0 "There should be no documents without Value fields"
+            }
+            testTask "succeeds when a field is not removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+                    
+                // This not raising an exception is the test
+                do! conn.removeFieldsByContains PostgresDb.TableName {| NumValue = 17 |} [ "Nothing" ]
+            }
+            testTask "succeeds when no document is matched" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldsByContains PostgresDb.TableName {| Abracadabra = "apple" |} [ "Value" ]
+            }
+        ]
+        testList "removeFieldsByJsonPath" [
+            testTask "succeeds when multiple fields are removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByJsonPath PostgresDb.TableName "$.NumValue ? (@ == 17)" [ "Sub"; "Value" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 1 "There should be 1 document without Value fields"
+            }
+            testTask "succeeds when a single field is removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+
+                do! conn.removeFieldsByJsonPath PostgresDb.TableName "$.NumValue ? (@ == 17)" [ "Sub" ]
+                let! noSubs = conn.countByField PostgresDb.TableName (Field.NEX "Sub")
+                Expect.equal noSubs 4 "There should now be 4 documents without Sub fields"
+                let! noValue = conn.countByField PostgresDb.TableName (Field.NEX "Value")
+                Expect.equal noValue 0 "There should be no documents without Value fields"
+            }
+            testTask "succeeds when a field is not removed" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                do! loadDocs conn
+                    
+                // This not raising an exception is the test
+                do! conn.removeFieldsByJsonPath PostgresDb.TableName "$.NumValue ? (@ == 17)" [ "Nothing" ]
+            }
+            testTask "succeeds when no document is matched" {
+                use db   = PostgresDb.BuildDb()
+                use conn = mkConn db
+                
+                // This not raising an exception is the test
+                do! conn.removeFieldsByJsonPath PostgresDb.TableName "$.Abracadabra ? (@ == \"apple\")" [ "Value" ]
+            }
+        ]
         testList "deleteById" [
             testTask "succeeds when a document is deleted" {
                 use db   = PostgresDb.BuildDb()
@@ -642,7 +798,7 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
 
-                do! conn.deleteByField PostgresDb.TableName "Value" EQ "purple"
+                do! conn.deleteByField PostgresDb.TableName (Field.EQ "Value" "purple")
                 let! remaining = conn.countAll PostgresDb.TableName
                 Expect.equal remaining 3 "There should have been 3 documents remaining"
             }
@@ -651,7 +807,7 @@ let integrationTests =
                 use conn = mkConn db
                 do! loadDocs conn
 
-                do! conn.deleteByField PostgresDb.TableName "Value" EQ "crimson"
+                do! conn.deleteByField PostgresDb.TableName (Field.EQ "Value" "crimson")
                 let! remaining = conn.countAll PostgresDb.TableName
                 Expect.equal remaining 5 "There should have been 5 documents remaining"
             }

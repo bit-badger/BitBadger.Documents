@@ -32,6 +32,51 @@ type Op =
         | NEX -> "IS NULL"
 
 
+/// Criteria for a field WHERE clause
+type Field = {
+    /// The name of the field
+    Name: string
+    
+    /// The operation by which the field will be compared
+    Op: Op
+    
+    /// The value of the field
+    Value: obj
+} with
+    
+    /// Create an equals (=) field criterion
+    static member EQ name (value: obj) =
+        { Name = name; Op = EQ; Value = value }
+    
+    /// Create a greater than (>) field criterion
+    static member GT name (value: obj) =
+        { Name = name; Op = GT; Value = value }
+    
+    /// Create a greater than or equal to (>=) field criterion
+    static member GE name (value: obj) =
+        { Name = name; Op = GE; Value = value }
+    
+    /// Create a less than (<) field criterion
+    static member LT name (value: obj) =
+        { Name = name; Op = LT; Value = value }
+    
+    /// Create a less than or equal to (<=) field criterion
+    static member LE name (value: obj) =
+        { Name = name; Op = LE; Value = value }
+    
+    /// Create a not equals (<>) field criterion
+    static member NE name (value: obj) =
+        { Name = name; Op = NE; Value = value }
+    
+    /// Create an exists (IS NOT NULL) field criterion
+    static member EX name =
+        { Name = name; Op = EX; Value = obj () }
+    
+    /// Create an not exists (IS NULL) field criterion
+    static member NEX name =
+        { Name = name; Op = NEX; Value = obj () }
+
+
 /// The required document serialization implementation
 type IDocumentSerializer =
     
@@ -107,17 +152,14 @@ module Query =
     
     /// Create a WHERE clause fragment to implement a comparison on a field in a JSON document
     [<CompiledName "WhereByField">]
-    let whereByField fieldName op paramName =
-        let theRest =
-            match op with
-            | EX | NEX -> string op
-            | _ -> $"{op} %s{paramName}"
-        $"data ->> '%s{fieldName}' {theRest}"
+    let whereByField field paramName =
+        let theRest = match field.Op with EX | NEX -> string field.Op | _ -> $"{field.Op} %s{paramName}"
+        $"data ->> '%s{field.Name}' {theRest}"
     
     /// Create a WHERE clause fragment to implement an ID-based query
     [<CompiledName "WhereById">]
     let whereById paramName =
-        whereByField (Configuration.idField ()) EQ paramName
+        whereByField (Field.EQ (Configuration.idField ()) 0) paramName
     
     /// Queries to define tables and indexes
     module Definition =
@@ -178,8 +220,8 @@ module Query =
         
         /// Query to count matching documents using a text comparison on a JSON field
         [<CompiledName "ByField">]
-        let byField tableName fieldName op =
-            $"""SELECT COUNT(*) AS it FROM %s{tableName} WHERE {whereByField fieldName op "@field"}"""
+        let byField tableName field =
+            $"""SELECT COUNT(*) AS it FROM %s{tableName} WHERE {whereByField field "@field"}"""
         
     /// Queries for determining document existence
     module Exists =
@@ -191,8 +233,8 @@ module Query =
 
         /// Query to determine if documents exist using a comparison on a JSON field
         [<CompiledName "ByField">]
-        let byField tableName fieldName op =
-            $"""SELECT EXISTS (SELECT 1 FROM %s{tableName} WHERE {whereByField fieldName op "@field"}) AS it"""
+        let byField tableName field =
+            $"""SELECT EXISTS (SELECT 1 FROM %s{tableName} WHERE {whereByField field "@field"}) AS it"""
         
     /// Queries for retrieving documents
     module Find =
@@ -204,8 +246,8 @@ module Query =
         
         /// Query to retrieve documents using a comparison on a JSON field
         [<CompiledName "ByField">]
-        let byField tableName fieldName op =
-            $"""{selectFromTable tableName} WHERE {whereByField fieldName op "@field"}"""
+        let byField tableName field =
+            $"""{selectFromTable tableName} WHERE {whereByField field "@field"}"""
         
     /// Queries to delete documents
     module Delete =
@@ -217,5 +259,5 @@ module Query =
 
         /// Query to delete documents using a comparison on a JSON field
         [<CompiledName "ByField">]
-        let byField tableName fieldName op =
-            $"""DELETE FROM %s{tableName} WHERE {whereByField fieldName op "@field"}"""
+        let byField tableName field =
+            $"""DELETE FROM %s{tableName} WHERE {whereByField field "@field"}"""

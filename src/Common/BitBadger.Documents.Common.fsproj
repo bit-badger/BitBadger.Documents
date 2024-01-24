@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageReleaseNotes>Initial release (RC 1)</PackageReleaseNotes>
+    <PackageReleaseNotes>Added Field type for by-field operations</PackageReleaseNotes>
     <PackageTags>JSON Document SQL</PackageTags>
   </PropertyGroup>
 

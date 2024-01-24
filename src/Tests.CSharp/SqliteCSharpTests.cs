@@ -1,4 +1,5 @@
-﻿using Expecto.CSharp;
+﻿using System.Text.Json;
+using Expecto.CSharp;
 using Expecto;
 using Microsoft.Data.Sqlite;
 using Microsoft.FSharp.Core;
@@ -35,11 +36,27 @@ public static class SqliteCSharpTests
                 }),
                 TestCase("ByField succeeds", () =>
                 {
-                    Expect.equal(Sqlite.Query.Patch.ByField("tbl", "Part", Op.NE),
+                    Expect.equal(Sqlite.Query.Patch.ByField("tbl", Field.NE("Part", 0)),
                         "UPDATE tbl SET data = json_patch(data, json(@data)) WHERE data ->> 'Part' <> @field",
                         "UPDATE partial by JSON comparison query not correct");
                 })
             }),
+            TestList("RemoveFields", new[]
+            {
+                TestCase("ById succeeds", () =>
+                {
+                    Expect.equal(Sqlite.Query.RemoveFields.ById("tbl", new[] { new SqliteParameter("@name", "one") }),
+                        "UPDATE tbl SET data = json_remove(data, @name) WHERE data ->> 'Id' = @id",
+                        "Remove field by ID query not correct");
+                }),
+                TestCase("ByField succeeds", () =>
+                {
+                    Expect.equal(Sqlite.Query.RemoveFields.ByField("tbl", Field.LT("Fly", 0),
+                            new[] { new SqliteParameter("@name0", "one"), new SqliteParameter("@name1", "two") }),
+                        "UPDATE tbl SET data = json_remove(data, @name0, @name1) WHERE data ->> 'Fly' < @field",
+                        "Remove field by field query not correct");
+                })
+            })
         }),
         TestList("Parameters", new[]
         {
@@ -55,11 +72,19 @@ public static class SqliteCSharpTests
                 Expect.equal(theParam.ParameterName, "@test", "The parameter name is incorrect");
                 Expect.equal(theParam.Value, "{\"Nice\":\"job\"}", "The parameter value is incorrect");
             }),
-            TestCase("Field succeeds", () =>
+            TestCase("AddField succeeds when adding a parameter", () =>
             {
-                var theParam = Parameters.Field(99);
+                var paramList = Parameters.AddField("@field", Field.EQ("it", 99), Enumerable.Empty<SqliteParameter>())
+                    .ToList();
+                Expect.hasLength(paramList, 1, "There should have been a parameter added");
+                var theParam = paramList[0];
                 Expect.equal(theParam.ParameterName, "@field", "The parameter name is incorrect");
                 Expect.equal(theParam.Value, 99, "The parameter value is incorrect");
+            }),
+            TestCase("AddField succeeds when not adding a parameter", () =>
+            {
+                var paramSeq = Parameters.AddField("@it", Field.EX("Coffee"), Enumerable.Empty<SqliteParameter>());
+                Expect.isEmpty(paramSeq, "There should not have been any parameters added");
             }),
             TestCase("None succeeds", () =>
             {
@@ -296,7 +321,7 @@ public static class SqliteCSharpTests
                 await using var db = await SqliteDb.BuildDb();
                 await LoadDocs();
 
-                var theCount = await Count.ByField(SqliteDb.TableName, "Value", Op.EQ, "purple");
+                var theCount = await Count.ByField(SqliteDb.TableName, Field.EQ("Value", "purple"));
                 Expect.equal(theCount, 2L, "There should have been 2 matching documents");
             })
         }),
@@ -328,7 +353,7 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    var exists = await Exists.ByField(SqliteDb.TableName, "NumValue", Op.GE, 10);
+                    var exists = await Exists.ByField(SqliteDb.TableName, Field.GE("NumValue", 10));
                     Expect.isTrue(exists, "There should have been existing documents");
                 }),
                 TestCase("succeeds when no matching documents exist", async () =>
@@ -336,7 +361,7 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    var exists = await Exists.ByField(SqliteDb.TableName, "Nothing", Op.EQ, "none");
+                    var exists = await Exists.ByField(SqliteDb.TableName, Field.EQ("Nothing", "none"));
                     Expect.isFalse(exists, "There should not have been any existing documents");
                 })
             })
@@ -390,7 +415,7 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    var docs = await Find.ByField<JsonDocument>(SqliteDb.TableName, "NumValue", Op.GT, 15);
+                    var docs = await Find.ByField<JsonDocument>(SqliteDb.TableName, Field.GT("NumValue", 15));
                     Expect.equal(docs.Count, 2, "There should have been two documents returned");
                 }),
                 TestCase("succeeds when documents are not found", async () =>
@@ -398,7 +423,7 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    var docs = await Find.ByField<JsonDocument>(SqliteDb.TableName, "Value", Op.EQ, "mauve");
+                    var docs = await Find.ByField<JsonDocument>(SqliteDb.TableName, Field.EQ("Value", "mauve"));
                     Expect.isEmpty(docs, "There should have been no documents returned");
                 })
             }),
@@ -409,7 +434,7 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    var doc = await Find.FirstByField<JsonDocument>(SqliteDb.TableName, "Value", Op.EQ, "another");
+                    var doc = await Find.FirstByField<JsonDocument>(SqliteDb.TableName, Field.EQ("Value", "another"));
                     Expect.isNotNull(doc, "There should have been a document returned");
                     Expect.equal(doc!.Id, "two", "The incorrect document was returned");
                 }),
@@ -418,7 +443,7 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    var doc = await Find.FirstByField<JsonDocument>(SqliteDb.TableName, "Sub.Foo", Op.EQ, "green");
+                    var doc = await Find.FirstByField<JsonDocument>(SqliteDb.TableName, Field.EQ("Sub.Foo", "green"));
                     Expect.isNotNull(doc, "There should have been a document returned");
                     Expect.contains(new[] { "two", "four" }, doc!.Id, "An incorrect document was returned");
                 }),
@@ -427,7 +452,7 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    var doc = await Find.FirstByField<JsonDocument>(SqliteDb.TableName, "Value", Op.EQ, "absent");
+                    var doc = await Find.FirstByField<JsonDocument>(SqliteDb.TableName, Field.EQ("Value", "absent"));
                     Expect.isNull(doc, "There should not have been a document returned");
                 })
             })
@@ -524,8 +549,8 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    await Patch.ByField(SqliteDb.TableName, "Value", Op.EQ, "purple", new { NumValue = 77 });
-                    var after = await Count.ByField(SqliteDb.TableName, "NumValue", Op.EQ, 77);
+                    await Patch.ByField(SqliteDb.TableName, Field.EQ("Value", "purple"), new { NumValue = 77 });
+                    var after = await Count.ByField(SqliteDb.TableName, Field.EQ("NumValue", 77));
                     Expect.equal(after, 2L, "There should have been 2 documents returned");
                 }),
                 TestCase("succeeds when no document is updated", async () =>
@@ -536,7 +561,67 @@ public static class SqliteCSharpTests
                     Expect.isEmpty(before, "There should have been no documents returned");
 
                     // This not raising an exception is the test
-                    await Patch.ByField(SqliteDb.TableName, "Value", Op.EQ, "burgundy", new { Foo = "green" });
+                    await Patch.ByField(SqliteDb.TableName, Field.EQ("Value", "burgundy"), new { Foo = "green" });
+                })
+            })
+        }),
+        TestList("RemoveFields", new[]
+        {
+            TestList("ById", new[]
+            {
+                TestCase("succeeds when fields are removed", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ById(SqliteDb.TableName, "two", new[] { "Sub", "Value" });
+                    var updated = await Find.ById<string, JsonDocument>(SqliteDb.TableName, "two");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.equal(updated.Value, "", "The string value should have been removed");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a field is not removed", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    await LoadDocs();
+                        
+                    // This not raising an exception is the test
+                    await RemoveFields.ById(SqliteDb.TableName, "two", new[] { "AFieldThatIsNotThere" });
+                }),
+                TestCase("succeeds when no document is matched", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    
+                    // This not raising an exception is the test
+                    await RemoveFields.ById(SqliteDb.TableName, "two", new[] { "Value" });
+                })
+            }),
+            TestList("ByField", new[]
+            {
+                TestCase("succeeds when a field is removed", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    await LoadDocs();
+
+                    await RemoveFields.ByField(SqliteDb.TableName, Field.EQ("NumValue", 17), new[] { "Sub" });
+                    var updated = await Find.ById<string, JsonDocument>(SqliteDb.TableName, "four");
+                    Expect.isNotNull(updated, "The updated document should have been retrieved");
+                    Expect.isNull(updated.Sub, "The sub-document should have been removed");
+                }),
+                TestCase("succeeds when a field is not removed", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    await LoadDocs();
+                        
+                    // This not raising an exception is the test
+                    await RemoveFields.ByField(SqliteDb.TableName, Field.EQ("NumValue", 17), new[] { "Nothing" });
+                }),
+                TestCase("succeeds when no document is matched", async () =>
+                {
+                    await using var db = await SqliteDb.BuildDb();
+                    
+                    // This not raising an exception is the test
+                    await RemoveFields.ByField(SqliteDb.TableName, Field.NE("Abracadabra", "apple"), new[] { "Value" });
                 })
             })
         }),
@@ -570,7 +655,7 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    await Delete.ByField(SqliteDb.TableName, "Value", Op.NE, "purple");
+                    await Delete.ByField(SqliteDb.TableName, Field.NE("Value", "purple"));
                     var remaining = await Count.All(SqliteDb.TableName);
                     Expect.equal(remaining, 2L, "There should have been 2 documents remaining");
                 }),
@@ -579,7 +664,7 @@ public static class SqliteCSharpTests
                     await using var db = await SqliteDb.BuildDb();
                     await LoadDocs();
 
-                    await Delete.ByField(SqliteDb.TableName, "Value", Op.EQ, "crimson");
+                    await Delete.ByField(SqliteDb.TableName, Field.EQ("Value", "crimson"));
                     var remaining = await Count.All(SqliteDb.TableName);
                     Expect.equal(remaining, 5L, "There should have been 5 documents remaining");
                 })
